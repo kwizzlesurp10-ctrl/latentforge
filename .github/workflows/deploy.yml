@@ -11,6 +11,9 @@ jobs:
     name: Deploy Preview
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     environment:
       name: preview
       url: ${{ steps.deploy.outputs.preview-url }}
@@ -40,15 +43,19 @@ jobs:
           echo "preview-url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Comment preview URL on PR
+        if: success()
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `🚀 **Vercel Preview Deployment**\n\n${process.env.PREVIEW_URL}`
-            });
+            const previewUrl = process.env.PREVIEW_URL || '';
+            if (previewUrl) {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: '🚀 **Vercel Preview Deployment**\n\n' + previewUrl
+              });
+            }
         env:
           PREVIEW_URL: ${{ steps.deploy.outputs.preview-url }}
 
@@ -56,6 +63,8 @@ jobs:
     name: Deploy Production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     environment:
       name: production
       url: ${{ steps.deploy.outputs.production-url }}
