@@ -22,9 +22,12 @@ interface CommandPaletteProps {
   isOpen: boolean
   onClose: () => void
   onOpenQuickCapture: () => void
+  onViewAllItems: () => void
+  onFilterByType: (type: 'code' | 'text' | 'image') => void
+  onOpenAIPreview: (mode: 'refine' | 'expand' | 'transform') => void
 }
 
-export function CommandPalette({ isOpen, onClose, onOpenQuickCapture }: CommandPaletteProps) {
+export function CommandPalette({ isOpen, onClose, onOpenQuickCapture, onViewAllItems, onFilterByType, onOpenAIPreview }: CommandPaletteProps) {
   const [search, setSearch] = useState('')
 
   useEffect(() => {
@@ -74,19 +77,31 @@ export function CommandPalette({ isOpen, onClose, onOpenQuickCapture }: CommandP
           <CommandSeparator />
 
           <CommandGroup heading="Vault">
-            <CommandItem className="flex items-center gap-2">
+            <CommandItem
+              onSelect={() => handleSelect(onViewAllItems)}
+              className="flex items-center gap-2 cursor-pointer"
+            >
               <Archive size={16} weight="duotone" className="text-secondary" />
               <span>View All Items</span>
             </CommandItem>
-            <CommandItem className="flex items-center gap-2">
+            <CommandItem
+              onSelect={() => handleSelect(() => onFilterByType('code'))}
+              className="flex items-center gap-2 cursor-pointer"
+            >
               <Code size={16} weight="duotone" className="text-secondary" />
               <span>Code Snippets</span>
             </CommandItem>
-            <CommandItem className="flex items-center gap-2">
+            <CommandItem
+              onSelect={() => handleSelect(() => onFilterByType('text'))}
+              className="flex items-center gap-2 cursor-pointer"
+            >
               <FileText size={16} weight="duotone" className="text-secondary" />
               <span>Text Notes</span>
             </CommandItem>
-            <CommandItem className="flex items-center gap-2">
+            <CommandItem
+              onSelect={() => handleSelect(() => onFilterByType('image'))}
+              className="flex items-center gap-2 cursor-pointer"
+            >
               <ImageIcon size={16} weight="duotone" className="text-accent" />
               <span>Images</span>
             </CommandItem>
@@ -95,15 +110,24 @@ export function CommandPalette({ isOpen, onClose, onOpenQuickCapture }: CommandP
           <CommandSeparator />
 
           <CommandGroup heading="AI Co-pilot">
-            <CommandItem className="flex items-center gap-2">
+            <CommandItem
+              onSelect={() => handleSelect(() => onOpenAIPreview('refine'))}
+              className="flex items-center gap-2 cursor-pointer"
+            >
               <Sparkle size={16} weight="duotone" className="text-primary" />
               <span>Refine Selection</span>
             </CommandItem>
-            <CommandItem className="flex items-center gap-2">
+            <CommandItem
+              onSelect={() => handleSelect(() => onOpenAIPreview('transform'))}
+              className="flex items-center gap-2 cursor-pointer"
+            >
               <Sparkle size={16} weight="duotone" className="text-primary" />
               <span>Generate Code</span>
             </CommandItem>
-            <CommandItem className="flex items-center gap-2">
+            <CommandItem
+              onSelect={() => handleSelect(() => onOpenAIPreview('expand'))}
+              className="flex items-center gap-2 cursor-pointer"
+            >
               <Sparkle size={16} weight="duotone" className="text-primary" />
               <span>Expand Idea</span>
             </CommandItem>

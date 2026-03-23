@@ -22,6 +22,7 @@ function App() {
   const [isCommandOpen, setIsCommandOpen] = useState(false)
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false)
   const [isAIPreviewOpen, setIsAIPreviewOpen] = useState(false)
+  const [vaultTypeFilter, setVaultTypeFilter] = useState<VaultItem['type'] | null>(null)
   
   const [selectedVaultItemId, setSelectedVaultItemId] = useState<string | null>(null)
   const [selectedCanvasNodeId, setSelectedCanvasNodeId] = useState<string | null>(null)
@@ -108,6 +109,20 @@ function App() {
     setConnections((current) => [...(current || []), newConnection])
   }, [setConnections])
 
+  const handleViewAllItems = useCallback(() => {
+    setIsSidebarOpen(true)
+    setVaultTypeFilter(null)
+  }, [])
+
+  const handleFilterByType = useCallback((type: VaultItem['type']) => {
+    setIsSidebarOpen(true)
+    setVaultTypeFilter(type)
+  }, [])
+
+  const handleOpenAIPreview = useCallback(() => {
+    setIsAIPreviewOpen(true)
+  }, [])
+
   return (
     <TooltipProvider delayDuration={100}>
       <div className="h-screen w-screen overflow-hidden bg-background text-foreground flex flex-col">
@@ -181,6 +196,8 @@ function App() {
             onClose={() => setIsSidebarOpen(false)}
             selectedItemId={selectedVaultItemId}
             onSelectItem={handleSelectVaultItem}
+            typeFilter={vaultTypeFilter}
+            onClearTypeFilter={() => setVaultTypeFilter(null)}
           />
 
           <ForgeCanvas
@@ -220,6 +237,9 @@ function App() {
             setIsCommandOpen(false)
             setIsQuickCaptureOpen(true)
           }}
+          onViewAllItems={handleViewAllItems}
+          onFilterByType={handleFilterByType}
+          onOpenAIPreview={handleOpenAIPreview}
         />
 
         <Toaster position="bottom-right" theme="dark" />
