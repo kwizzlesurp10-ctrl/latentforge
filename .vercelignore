@@ -1,0 +1,10 @@
+e2e
+playwright-report
+coverage
+*.test.*
+*.spec.*
+vitest.config.ts
+playwright.config.ts
+.percyrc.yml
+TESTING.md
+VISUAL_TESTING.md
