@@ -1,6 +1,7 @@
 import { useKV } from '@github/spark/hooks'
 import { useState, useCallback } from 'react'
 import { VaultItem, CanvasNode, Connection } from '@/lib/types'
+import { generateId } from '@/lib/utils'
 import { VaultSidebar } from '@/components/vault/VaultSidebar'
 import { ForgeCanvas } from '@/components/canvas/ForgeCanvas'
 import { QuickCapture } from '@/components/vault/QuickCapture'
@@ -50,7 +51,7 @@ function App() {
   const addVaultItem = useCallback((item: Omit<VaultItem, 'id' | 'createdAt' | 'updatedAt' | 'version'>) => {
     const newItem: VaultItem = {
       ...item,
-      id: `vault-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: generateId('vault'),
       createdAt: Date.now(),
       updatedAt: Date.now(),
       version: 1,
@@ -77,7 +78,7 @@ function App() {
   const addCanvasNode = useCallback((node: Omit<CanvasNode, 'id'>) => {
     const newNode: CanvasNode = {
       ...node,
-      id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: generateId('node'),
     }
     
     setCanvasNodes((current) => [...(current || []), newNode])
@@ -99,7 +100,7 @@ function App() {
 
   const addConnection = useCallback((source: string, target: string) => {
     const newConnection: Connection = {
-      id: `conn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: generateId('conn'),
       source,
       target,
     }

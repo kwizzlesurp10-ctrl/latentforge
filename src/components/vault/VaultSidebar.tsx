@@ -11,7 +11,8 @@ import {
   Lightning, 
   Trash,
   Tag,
-  Clock
+  Clock,
+  MagnifyingGlass
 } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -31,10 +32,17 @@ interface VaultSidebarProps {
 export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSelectItem }: VaultSidebarProps) {
   const [activeTab, setActiveTab] = useState('all')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
 
   const allTags = Array.from(new Set(items.flatMap((item) => item.tags)))
 
   const filteredItems = items.filter((item) => {
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      const matchesContent = item.content.toLowerCase().includes(query)
+      const matchesTags = item.tags.some((tag) => tag.toLowerCase().includes(query))
+      if (!matchesContent && !matchesTags) return false
+    }
     if (activeTab === 'all') return true
     if (activeTab === 'tags' && selectedTags.length > 0) {
       return selectedTags.some((tag) => item.tags.includes(tag))
@@ -69,6 +77,20 @@ export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSe
             <Tag size={16} weight="duotone" />
             Shadow Vault
           </h2>
+        </div>
+
+        <div className="px-4 pt-3">
+          <div className="relative">
+            <MagnifyingGlass size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search vault..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              data-testid="vault-search"
+              className="w-full pl-8 pr-3 py-1.5 text-sm border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
+            />
+          </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">

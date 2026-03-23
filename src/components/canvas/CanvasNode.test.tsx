@@ -99,4 +99,29 @@ describe('CanvasNode', () => {
     const textarea = screen.getByPlaceholderText('Type your idea...')
     expect(textarea).toBeInTheDocument()
   })
+
+  it('should display word and character count for non-empty content', () => {
+    const node = createMockCanvasNode({ content: 'Hello world test' })
+    render(<CanvasNodeComponent {...defaultProps} node={node} />)
+    
+    const wordCount = screen.getByTestId('node-word-count')
+    expect(wordCount).toBeInTheDocument()
+    expect(wordCount).toHaveTextContent('3 words')
+    expect(wordCount).toHaveTextContent('16 chars')
+  })
+
+  it('should not display word count for empty content', () => {
+    const node = createMockCanvasNode({ content: '' })
+    render(<CanvasNodeComponent {...defaultProps} node={node} />)
+    
+    expect(screen.queryByTestId('node-word-count')).not.toBeInTheDocument()
+  })
+
+  it('should show singular "word" for single-word content', () => {
+    const node = createMockCanvasNode({ content: 'Hello' })
+    render(<CanvasNodeComponent {...defaultProps} node={node} />)
+    
+    const wordCount = screen.getByTestId('node-word-count')
+    expect(wordCount).toHaveTextContent('1 word')
+  })
 })
