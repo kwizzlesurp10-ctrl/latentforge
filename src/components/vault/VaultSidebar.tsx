@@ -24,9 +24,11 @@ interface VaultSidebarProps {
   onUpdateItem: (id: string, updates: Partial<VaultItem>) => void
   onDeleteItem: (id: string) => void
   onClose: () => void
+  selectedItemId?: string | null
+  onSelectItem: (id: string) => void
 }
 
-export function VaultSidebar({ items, isOpen, onDeleteItem }: VaultSidebarProps) {
+export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSelectItem }: VaultSidebarProps) {
   const [activeTab, setActiveTab] = useState('all')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
 
@@ -87,7 +89,13 @@ export function VaultSidebar({ items, isOpen, onDeleteItem }: VaultSidebarProps)
                   filteredItems.map((item) => (
                     <Card
                       key={item.id}
-                      className="p-4 border-border hover:border-primary/50 transition-all cursor-pointer group glow-hover"
+                      onClick={() => onSelectItem(item.id)}
+                      className={cn(
+                        'p-4 border-2 transition-all cursor-pointer group',
+                        selectedItemId === item.id 
+                          ? 'border-primary glow-primary bg-primary/5' 
+                          : 'border-border hover:border-primary/50 glow-hover'
+                      )}
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2">

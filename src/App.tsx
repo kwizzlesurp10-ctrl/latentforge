@@ -5,6 +5,7 @@ import { VaultSidebar } from '@/components/vault/VaultSidebar'
 import { ForgeCanvas } from '@/components/canvas/ForgeCanvas'
 import { QuickCapture } from '@/components/vault/QuickCapture'
 import { CommandPalette } from '@/components/CommandPalette'
+import { AIPreviewPanel } from '@/components/AIPreviewPanel'
 import { Toaster } from '@/components/ui/sonner'
 import { Archive, Sparkle, GitBranch } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
@@ -18,6 +19,32 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isCommandOpen, setIsCommandOpen] = useState(false)
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false)
+  const [isAIPreviewOpen, setIsAIPreviewOpen] = useState(false)
+  
+  const [selectedVaultItemId, setSelectedVaultItemId] = useState<string | null>(null)
+  const [selectedCanvasNodeId, setSelectedCanvasNodeId] = useState<string | null>(null)
+
+  const handleSelectVaultItem = useCallback((id: string) => {
+    setSelectedVaultItemId(id)
+    setSelectedCanvasNodeId(null)
+    setIsAIPreviewOpen(true)
+  }, [])
+
+  const handleSelectCanvasNode = useCallback((id: string | null) => {
+    setSelectedCanvasNodeId(id)
+    setSelectedVaultItemId(null)
+    if (id) {
+      setIsAIPreviewOpen(true)
+    }
+  }, [])
+
+  const selectedVaultItem = selectedVaultItemId 
+    ? vaultItems?.find(item => item.id === selectedVaultItemId)
+    : null
+
+  const selectedCanvasNode = selectedCanvasNodeId 
+    ? canvasNodes?.find(node => node.id === selectedCanvasNodeId)
+    : null
 
   const addVaultItem = useCallback((item: Omit<VaultItem, 'id' | 'createdAt' | 'updatedAt' | 'version'>) => {
     const newItem: VaultItem = {
@@ -149,6 +176,8 @@ function App() {
             onUpdateItem={updateVaultItem}
             onDeleteItem={deleteVaultItem}
             onClose={() => setIsSidebarOpen(false)}
+            selectedItemId={selectedVaultItemId}
+            onSelectItem={handleSelectVaultItem}
           />
 
           <ForgeCanvas
@@ -158,7 +187,21 @@ function App() {
             onUpdateNode={updateCanvasNode}
             onDeleteNode={deleteCanvasNode}
             onAddConnection={addConnection}
+            selectedNodeId={selectedCanvasNodeId}
+            onSelectNode={handleSelectCanvasNode}
           />
+
+          {isAIPreviewOpen && (
+            <AIPreviewPanel
+              selectedItem={selectedVaultItem}
+              selectedNode={selectedCanvasNode}
+              onClose={() => {
+                setIsAIPreviewOpen(false)
+                setSelectedVaultItemId(null)
+                setSelectedCanvasNodeId(null)
+              }}
+            />
+          )}
         </div>
 
         <QuickCapture

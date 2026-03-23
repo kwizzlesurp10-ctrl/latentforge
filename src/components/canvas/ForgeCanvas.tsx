@@ -12,6 +12,8 @@ interface ForgeCanvasProps {
   onUpdateNode: (id: string, updates: Partial<CanvasNode>) => void
   onDeleteNode: (id: string) => void
   onAddConnection: (source: string, target: string) => void
+  selectedNodeId?: string | null
+  onSelectNode: (id: string | null) => void
 }
 
 export function ForgeCanvas({
@@ -20,12 +22,13 @@ export function ForgeCanvas({
   onAddNode,
   onUpdateNode,
   onDeleteNode,
+  selectedNodeId,
+  onSelectNode,
 }: ForgeCanvasProps) {
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -46,7 +49,7 @@ export function ForgeCanvas({
     if (e.target === canvasRef.current || (e.target as HTMLElement).closest('.canvas-background')) {
       setIsPanning(true)
       setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
-      setSelectedNodeId(null)
+      onSelectNode(null)
     }
   }
 
@@ -79,7 +82,7 @@ export function ForgeCanvas({
       connections: [],
     })
 
-    setSelectedNodeId(newNode.id)
+    onSelectNode(newNode.id)
   }
 
   useEffect(() => {
@@ -91,7 +94,7 @@ export function ForgeCanvas({
       }
       if (e.key === 'Delete' && selectedNodeId) {
         onDeleteNode(selectedNodeId)
-        setSelectedNodeId(null)
+        onSelectNode(null)
       }
     }
 
@@ -219,7 +222,7 @@ export function ForgeCanvas({
               key={node.id}
               node={node}
               isSelected={selectedNodeId === node.id}
-              onSelect={() => setSelectedNodeId(node.id)}
+              onSelect={() => onSelectNode(node.id)}
               onUpdate={(updates) => onUpdateNode(node.id, updates)}
               onDelete={() => onDeleteNode(node.id)}
             />
