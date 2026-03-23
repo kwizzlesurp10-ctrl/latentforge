@@ -122,7 +122,10 @@ export function CanvasNodeComponent({
 
         {node.content.trim().length > 0 && (
           <div data-testid="node-word-count" className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground font-mono">
-            <span>{countWords(node.content)} {countWords(node.content) === 1 ? 'word' : 'words'}</span>
+            {(() => {
+              const words = countWords(node.content)
+              return <span>{words} {words === 1 ? 'word' : 'words'}</span>
+            })()}
             <span>·</span>
             <span>{node.content.length} chars</span>
           </div>
