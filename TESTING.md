@@ -58,9 +58,24 @@ npm run test:e2e:debug
 
 ### Visual Regression Tests
 
-Run visual regression tests with Percy:
+Run all visual regression tests with Percy:
 ```bash
 npm run test:visual
+```
+
+Run dark mode theme tests only:
+```bash
+npm run test:visual:dark
+```
+
+Run theme comparison tests:
+```bash
+npm run test:visual:themes
+```
+
+Run visual tests locally without Percy (faster, no snapshots):
+```bash
+npm run test:visual:local
 ```
 
 Update visual baselines (use with caution):
@@ -68,7 +83,7 @@ Update visual baselines (use with caution):
 npm run test:visual:update
 ```
 
-**Note**: Visual tests require a `PERCY_TOKEN` environment variable. See [VISUAL_TESTING.md](./VISUAL_TESTING.md) for setup details.
+**Note**: Visual tests require a `PERCY_TOKEN` environment variable. See [VISUAL_TESTING.md](./VISUAL_TESTING.md) and [DARK_MODE_TESTING.md](./DARK_MODE_TESTING.md) for setup details.
 
 ### Run All Tests
 

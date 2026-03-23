@@ -20,6 +20,9 @@
         "test:e2e:debug": "playwright test --debug",
         "test:visual": "percy exec -- playwright test e2e/visual",
         "test:visual:update": "percy exec -- playwright test e2e/visual --update-snapshots",
+        "test:visual:dark": "percy exec -- playwright test e2e/visual/dark-mode-themes.spec.ts",
+        "test:visual:themes": "percy exec -- playwright test e2e/visual/theme-comparison.spec.ts",
+        "test:visual:local": "playwright test e2e/visual --headed",
         "test:all": "npm run test:run && npm run test:e2e"
     },
     "dependencies": {
