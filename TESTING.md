@@ -56,6 +56,20 @@ Debug E2E tests:
 npm run test:e2e:debug
 ```
 
+### Visual Regression Tests
+
+Run visual regression tests with Percy:
+```bash
+npm run test:visual
+```
+
+Update visual baselines (use with caution):
+```bash
+npm run test:visual:update
+```
+
+**Note**: Visual tests require a `PERCY_TOKEN` environment variable. See [VISUAL_TESTING.md](./VISUAL_TESTING.md) for setup details.
+
 ### Run All Tests
 
 Run both unit and E2E tests:
@@ -208,9 +222,13 @@ test.describe('Feature Name', () => {
 ├── e2e/
 │   ├── canvas.spec.ts              # Canvas E2E tests
 │   ├── vault.spec.ts               # Vault E2E tests
-│   └── ai-workflows.spec.ts        # AI workflow E2E tests
+│   ├── ai-workflows.spec.ts        # AI workflow E2E tests
+│   └── visual/
+│       ├── visual-regression.spec.ts  # Visual regression tests
+│       └── percy-helpers.ts           # Percy utility functions
 ├── vitest.config.ts                # Vitest configuration
-└── playwright.config.ts            # Playwright configuration
+├── playwright.config.ts            # Playwright configuration
+└── .percyrc.yml                    # Percy configuration
 ```
 
 ## Mock Data
@@ -230,8 +248,16 @@ Tests are configured to run in CI environments:
 
 - **Unit tests**: Run on every commit
 - **E2E tests**: Run with retries in CI
+- **Visual regression tests**: Run with Percy on PRs and main branch pushes
 - **Coverage reports**: Generated for unit tests
 - **Cross-browser testing**: Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari
+
+### GitHub Actions Workflows
+
+- `.github/workflows/ci.yml` - Unit and E2E tests
+- `.github/workflows/visual-regression.yml` - Percy visual tests
+
+See [VISUAL_TESTING.md](./VISUAL_TESTING.md) for detailed visual regression testing documentation.
 
 ## Debugging Tests
 

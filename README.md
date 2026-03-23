@@ -281,21 +281,36 @@ VITE_CUSTOM_API_KEY=your_api_key_here
 
 ## 🧪 Testing
 
+LatentForge has comprehensive test coverage including unit tests, E2E tests, and visual regression testing.
+
 ### Run Tests
 
 ```bash
-# Unit tests
+# Unit tests with Vitest
 npm test
 
-# E2E tests (when implemented)
+# E2E tests with Playwright
 npm run test:e2e
 
-# Type checking
-npm run type-check
+# Visual regression tests with Percy
+npm run test:visual
 
-# Linting
-npm run lint
+# All tests
+npm run test:all
 ```
+
+### Testing Documentation
+
+- **[TESTING.md](./TESTING.md)** - Complete testing guide with examples
+- **[VISUAL_TESTING.md](./VISUAL_TESTING.md)** - Visual regression testing with Percy
+- **[PERCY_QUICKSTART.md](./PERCY_QUICKSTART.md)** - Get Percy running in 5 minutes
+
+### Test Coverage
+
+- ✅ **Unit Tests**: Components, utilities, hooks
+- ✅ **E2E Tests**: User flows, canvas interactions, AI workflows
+- ✅ **Visual Tests**: UI consistency across 4 viewports, 3 browsers
+- ✅ **CI/CD**: Automated testing on every PR
 
 ---
 

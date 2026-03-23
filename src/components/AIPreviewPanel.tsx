@@ -162,7 +162,7 @@ Provide the transformed version.`
   }
 
   return (
-    <div className="w-96 border-l border-border bg-card flex flex-col">
+    <div data-testid="ai-preview-panel" className="w-96 border-l border-border bg-card flex flex-col">
       <div className="p-4 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkle size={20} weight="duotone" className="text-primary" />

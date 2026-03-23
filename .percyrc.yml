@@ -1,0 +1,30 @@
+version: 2
+snapshot:
+  widths:
+    - 375
+    - 768
+    - 1280
+    - 1920
+  min-height: 1024
+  percy-css: |
+    .pulse-glow,
+    .glow-hover,
+    [data-disable-percy] {
+      animation: none !important;
+    }
+    .animate-pulse {
+      animation: none !important;
+    }
+  enable-javascript: true
+  wait-for-timeout: 3000
+  wait-for-selector: '[data-percy-ready]'
+
+discovery:
+  allowed-hostnames:
+    - localhost
+    - 127.0.0.1
+
+static:
+  ignore:
+    - '**/*.map'
+    - '**/node_modules/**'

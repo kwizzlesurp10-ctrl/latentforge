@@ -81,7 +81,7 @@ export function QuickCapture({ isOpen, onClose, onSave }: QuickCaptureProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl glow-primary">
+      <DialogContent data-testid="quick-capture-dialog" className="sm:max-w-2xl glow-primary">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-primary">
             <Lightning size={24} weight="duotone" />

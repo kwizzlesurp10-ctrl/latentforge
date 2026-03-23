@@ -57,6 +57,7 @@ export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSe
 
   return (
     <aside
+      data-testid="vault-sidebar"
       className={cn(
         'border-r border-border bg-card transition-all duration-300 shrink-0',
         isOpen ? 'w-80' : 'w-0 overflow-hidden'
@@ -89,6 +90,7 @@ export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSe
                   filteredItems.map((item) => (
                     <Card
                       key={item.id}
+                      data-testid="vault-item"
                       onClick={() => onSelectItem(item.id)}
                       className={cn(
                         'p-4 border-2 transition-all cursor-pointer group',

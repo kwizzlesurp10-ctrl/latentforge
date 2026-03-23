@@ -117,6 +117,7 @@ function App() {
               size="icon"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               className="glow-hover"
+              aria-label="Toggle vault sidebar"
             >
               <Archive size={20} weight="duotone" />
             </Button>

@@ -103,7 +103,7 @@ export function ForgeCanvas({
   }, [selectedNodeId, onDeleteNode])
 
   return (
-    <div className="flex-1 flex flex-col bg-background relative overflow-hidden">
+    <div data-testid="forge-canvas" className="flex-1 flex flex-col bg-background relative overflow-hidden">
       <div className="absolute top-4 left-4 z-10 flex gap-2">
         <Button
           size="sm"
