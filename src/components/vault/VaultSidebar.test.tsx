@@ -147,4 +147,56 @@ describe('VaultSidebar', () => {
     expect(screen.getByText('Sample prompt for AI generation')).toBeInTheDocument()
     expect(screen.getByText('Regular text note about project ideas')).toBeInTheDocument()
   })
+
+  it('should render search input', () => {
+    render(<VaultSidebar {...defaultProps} items={mockVaultItems} />)
+    
+    expect(screen.getByTestId('vault-search')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Search vault...')).toBeInTheDocument()
+  })
+
+  it('should filter items by content when searching', () => {
+    render(<VaultSidebar {...defaultProps} items={mockVaultItems} />)
+    
+    const searchInput = screen.getByTestId('vault-search')
+    fireEvent.change(searchInput, { target: { value: 'code snippet' } })
+    
+    expect(screen.getByText('Test vault item for code snippet')).toBeInTheDocument()
+    expect(screen.queryByText('Sample prompt for AI generation')).not.toBeInTheDocument()
+    expect(screen.queryByText('Regular text note about project ideas')).not.toBeInTheDocument()
+  })
+
+  it('should filter items by tag text when searching', () => {
+    render(<VaultSidebar {...defaultProps} items={mockVaultItems} />)
+    
+    const searchInput = screen.getByTestId('vault-search')
+    fireEvent.change(searchInput, { target: { value: 'brainstorm' } })
+    
+    expect(screen.getByText('Regular text note about project ideas')).toBeInTheDocument()
+    expect(screen.queryByText('Test vault item for code snippet')).not.toBeInTheDocument()
+  })
+
+  it('should show all items when search is cleared', () => {
+    render(<VaultSidebar {...defaultProps} items={mockVaultItems} />)
+    
+    const searchInput = screen.getByTestId('vault-search')
+    fireEvent.change(searchInput, { target: { value: 'code snippet' } })
+    
+    expect(screen.queryByText('Sample prompt for AI generation')).not.toBeInTheDocument()
+    
+    fireEvent.change(searchInput, { target: { value: '' } })
+    
+    expect(screen.getByText('Test vault item for code snippet')).toBeInTheDocument()
+    expect(screen.getByText('Sample prompt for AI generation')).toBeInTheDocument()
+    expect(screen.getByText('Regular text note about project ideas')).toBeInTheDocument()
+  })
+
+  it('should be case-insensitive when searching', () => {
+    render(<VaultSidebar {...defaultProps} items={mockVaultItems} />)
+    
+    const searchInput = screen.getByTestId('vault-search')
+    fireEvent.change(searchInput, { target: { value: 'CODE SNIPPET' } })
+    
+    expect(screen.getByText('Test vault item for code snippet')).toBeInTheDocument()
+  })
 })

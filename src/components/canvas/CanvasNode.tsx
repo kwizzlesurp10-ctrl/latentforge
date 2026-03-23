@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Trash, DotsSix } from '@phosphor-icons/react'
-import { cn } from '@/lib/utils'
+import { cn, countWords } from '@/lib/utils'
 
 interface CanvasNodeComponentProps {
   node: CanvasNode
@@ -119,6 +119,17 @@ export function CanvasNodeComponent({
               : 'Add content...'
           }
         />
+
+        {node.content.trim().length > 0 && (
+          <div data-testid="node-word-count" className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground font-mono">
+            {(() => {
+              const words = countWords(node.content)
+              return <span>{words} {words === 1 ? 'word' : 'words'}</span>
+            })()}
+            <span>·</span>
+            <span>{node.content.length} chars</span>
+          </div>
+        )}
       </Card>
     </div>
   )
