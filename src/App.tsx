@@ -6,6 +6,7 @@ import { ForgeCanvas } from '@/components/canvas/ForgeCanvas'
 import { QuickCapture } from '@/components/vault/QuickCapture'
 import { CommandPalette } from '@/components/CommandPalette'
 import { AIPreviewPanel } from '@/components/AIPreviewPanel'
+import { PWAInstallBanner } from '@/components/PWAInstallBanner'
 import { Toaster } from '@/components/ui/sonner'
 import { Archive, Sparkle, GitBranch } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
@@ -220,6 +221,7 @@ function App() {
         />
 
         <Toaster position="bottom-right" theme="dark" />
+        <PWAInstallBanner />
       </div>
     </TooltipProvider>
   )
