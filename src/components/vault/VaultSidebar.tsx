@@ -26,15 +26,18 @@ interface VaultSidebarProps {
   onClose: () => void
   selectedItemId?: string | null
   onSelectItem: (id: string) => void
+  typeFilter?: VaultItem['type'] | null
+  onClearTypeFilter?: () => void
 }
 
-export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSelectItem }: VaultSidebarProps) {
+export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSelectItem, typeFilter, onClearTypeFilter }: VaultSidebarProps) {
   const [activeTab, setActiveTab] = useState('all')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
 
   const allTags = Array.from(new Set(items.flatMap((item) => item.tags)))
 
   const filteredItems = items.filter((item) => {
+    if (typeFilter && item.type !== typeFilter) return false
     if (activeTab === 'all') return true
     if (activeTab === 'tags' && selectedTags.length > 0) {
       return selectedTags.some((tag) => item.tags.includes(tag))
@@ -69,6 +72,21 @@ export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSe
             <Tag size={16} weight="duotone" />
             Shadow Vault
           </h2>
+          {typeFilter && (
+            <div className="mt-2 flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">
+                {typeFilter}
+              </Badge>
+              {onClearTypeFilter && (
+                <button
+                  onClick={onClearTypeFilter}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
