@@ -115,16 +115,36 @@ describe('VaultSidebar', () => {
     expect(badges.length).toBeGreaterThan(0)
   })
 
-  it('should filter items by tag when tag is selected', () => {
-    render(<VaultSidebar {...defaultProps} items={mockVaultItems} />)
-    
-    const tagsTab = screen.getByRole('tab', { name: 'Tags' })
-    fireEvent.click(tagsTab)
-    
-    const testingTagButton = screen.getByText('testing').closest('button')
-    fireEvent.click(testingTagButton!)
-    
+  it('should filter items by typeFilter prop', () => {
+    render(<VaultSidebar {...defaultProps} items={mockVaultItems} typeFilter="code" />)
+
     expect(screen.getByText('Test vault item for code snippet')).toBeInTheDocument()
     expect(screen.queryByText('Sample prompt for AI generation')).not.toBeInTheDocument()
+    expect(screen.queryByText('Regular text note about project ideas')).not.toBeInTheDocument()
+  })
+
+  it('should show type filter badge when typeFilter is set', () => {
+    const onClearTypeFilter = vi.fn()
+    render(<VaultSidebar {...defaultProps} items={mockVaultItems} typeFilter="code" onClearTypeFilter={onClearTypeFilter} />)
+
+    expect(screen.getByText('code')).toBeInTheDocument()
+    expect(screen.getByText('Clear filter')).toBeInTheDocument()
+  })
+
+  it('should call onClearTypeFilter when clear filter is clicked', () => {
+    const onClearTypeFilter = vi.fn()
+    render(<VaultSidebar {...defaultProps} items={mockVaultItems} typeFilter="text" onClearTypeFilter={onClearTypeFilter} />)
+
+    fireEvent.click(screen.getByText('Clear filter'))
+
+    expect(onClearTypeFilter).toHaveBeenCalled()
+  })
+
+  it('should show all items when typeFilter is null', () => {
+    render(<VaultSidebar {...defaultProps} items={mockVaultItems} typeFilter={null} />)
+
+    expect(screen.getByText('Test vault item for code snippet')).toBeInTheDocument()
+    expect(screen.getByText('Sample prompt for AI generation')).toBeInTheDocument()
+    expect(screen.getByText('Regular text note about project ideas')).toBeInTheDocument()
   })
 })
