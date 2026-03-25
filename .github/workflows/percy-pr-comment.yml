@@ -1,0 +1,239 @@
+name: Percy PR Comment Enhanced
+
+on:
+  workflow_run:
+    workflows: ["Visual Regression Testing"]
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  checks: write
+  contents: read
+
+jobs:
+  enhanced-percy-comment:
+    name: Enhanced Percy PR Comment
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Get PR information
+        id: pr-info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pullRequests } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: `${context.repo.owner}:${context.payload.workflow_run.head_branch}`
+            });
+            
+            if (pullRequests.length > 0) {
+              const pr = pullRequests[0];
+              core.setOutput('number', pr.number);
+              core.setOutput('title', pr.title);
+              core.setOutput('author', pr.user.login);
+              core.setOutput('base', pr.base.ref);
+              core.setOutput('head', pr.head.ref);
+              return pr.number;
+            }
+            return null;
+
+      - name: Download Percy artifacts
+        if: steps.pr-info.outputs.number
+        uses: actions/download-artifact@v4
+        with:
+          name: percy-logs-${{ github.event.workflow_run.id }}
+          path: ./percy-logs
+        continue-on-error: true
+
+      - name: Generate Percy report
+        if: steps.pr-info.outputs.number
+        id: percy-report
+        run: |
+          if [ -f "./percy-logs/percy-output.log" ]; then
+            node .github/scripts/percy-report.mjs ./percy-logs/percy-output.log markdown > percy-report.md
+            echo "report-generated=true" >> $GITHUB_OUTPUT
+          else
+            echo "report-generated=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      - name: Create enhanced PR comment
+        if: steps.pr-info.outputs.number
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const prNumber = parseInt('${{ steps.pr-info.outputs.number }}');
+            const prTitle = '${{ steps.pr-info.outputs.title }}';
+            const prAuthor = '${{ steps.pr-info.outputs.author }}';
+            const baseBranch = '${{ steps.pr-info.outputs.base }}';
+            const headBranch = '${{ steps.pr-info.outputs.head }}';
+            const workflowConclusion = '${{ github.event.workflow_run.conclusion }}';
+            const reportGenerated = '${{ steps.percy-report.outputs.report-generated }}' === 'true';
+            
+            let percyReport = '';
+            if (reportGenerated && fs.existsSync('percy-report.md')) {
+              percyReport = fs.readFileSync('percy-report.md', 'utf-8');
+            }
+            
+            const statusEmoji = workflowConclusion === 'success' ? '✅' : 
+                               workflowConclusion === 'failure' ? '❌' : '⚠️';
+            
+            const body = `## ${statusEmoji} Visual Regression Testing Results
+            
+            **PR:** #${prNumber} - ${prTitle}
+            **Author:** @${prAuthor}
+            **Branch:** \`${headBranch}\` → \`${baseBranch}\`
+            **Workflow Status:** ${workflowConclusion}
+            
+            ---
+            
+            ${percyReport || '### Percy Report\n\nGenerating visual regression report... Check back soon!'}
+            
+            ---
+            
+            ### 📖 How to Review Visual Changes
+            
+            1. **Click the Percy build link** above to view detailed comparisons
+            2. **Review each snapshot** - Percy shows before/after with diff overlay
+            3. **Check all viewports** - Mobile (375px), Tablet (768px), Desktop (1280px, 1920px)
+            4. **Verify intentional changes** - Color tweaks, layout adjustments, new features
+            5. **Investigate unexpected changes** - Bugs, regressions, unintended side effects
+            6. **Approve or request changes** on Percy dashboard
+            
+            ### 🎨 What Percy Checks
+            
+            <table>
+            <tr>
+            <td>
+            
+            **Core Views**
+            - Dashboard layout
+            - Forge Canvas
+            - Shadow Vault
+            - AI Preview panel
+            - Modals & overlays
+            
+            </td>
+            <td>
+            
+            **Responsiveness**
+            - Mobile (375px)
+            - Tablet (768px)
+            - Desktop (1280px)
+            - Large (1920px)
+            
+            </td>
+            <td>
+            
+            **Themes**
+            - Dark mode (default)
+            - Color variations
+            - Contrast modes
+            - Accessibility
+            
+            </td>
+            </tr>
+            </table>
+            
+            ### 🔍 Common Visual Issues
+            
+            | Issue | Cause | Solution |
+            |-------|-------|----------|
+            | Layout shift | CSS changes | Review spacing/positioning |
+            | Color mismatch | Theme updates | Verify color palette |
+            | Font rendering | Typography changes | Check font weights/sizes |
+            | Animation frames | Timing changes | Review animation configs |
+            | Component states | State logic | Test hover/focus/active |
+            
+            ### 🚀 Next Steps
+            
+            ${workflowConclusion === 'success' 
+              ? '✅ **All visual tests passed!** Once Percy analysis completes, review any detected changes and approve if they look good.' 
+              : '⚠️ **Visual tests need attention.** Review the Percy build for details and fix any issues.'}
+            
+            ---
+            
+            <details>
+            <summary>💡 Pro Tips for Percy Reviews</summary>
+            
+            - **Use keyboard shortcuts** on Percy: Arrow keys to navigate, A to approve, R to reject
+            - **Focus on user-facing changes** - Ignore technical artifacts or test helpers
+            - **Check mobile first** - Most regressions appear on smaller screens
+            - **Zoom in on diffs** - Percy highlights changed pixels in red/green
+            - **Compare multiple builds** - Look for patterns in recurring changes
+            - **Set up auto-approval** - Configure rules for trusted change types
+            
+            </details>
+            
+            <details>
+            <summary>🔧 Troubleshooting Visual Tests</summary>
+            
+            **If snapshots are missing:**
+            \`\`\`bash
+            # Run locally to debug
+            export PERCY_TOKEN=your_token
+            npm run test:visual:local
+            \`\`\`
+            
+            **If tests are flaky:**
+            - Check for animations (should be disabled in percy-css)
+            - Verify data-percy-ready attribute
+            - Increase wait-for-timeout in .percyrc.yml
+            
+            **If changes are unexpected:**
+            - Review recent CSS/theme changes
+            - Check for dynamic content (dates, random data)
+            - Verify component state management
+            
+            </details>
+            
+            ---
+            
+            <sub>
+            🤖 This comment is automatically generated by Percy CI/CD integration.  
+            📅 Last updated: ${new Date().toISOString()}  
+            🔗 [Visual Testing Docs](./PERCY_CI_CD.md) | [Percy Dashboard](https://percy.io)
+            </sub>
+            `;
+            
+            // Find existing comment or create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Visual Regression Testing Results')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+              console.log('Updated existing PR comment');
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: body
+              });
+              console.log('Created new PR comment');
+            }

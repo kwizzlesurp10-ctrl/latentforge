@@ -26,7 +26,10 @@
         "test:visual:dark": "percy exec -- playwright test e2e/visual/dark-mode-themes.spec.ts",
         "test:visual:themes": "percy exec -- playwright test e2e/visual/theme-comparison.spec.ts",
         "test:visual:local": "playwright test e2e/visual --headed",
-        "test:all": "npm run test:run && npm run test:e2e"
+        "test:all": "npm run test:run && npm run test:e2e",
+        "percy:validate": "node scripts/validate-percy.mjs",
+        "percy:setup": "bash scripts/setup-percy.sh",
+        "percy:report": "node .github/scripts/percy-report.mjs"
     },
     "dependencies": {
         "@github/spark": ">=0.43.1 <1",

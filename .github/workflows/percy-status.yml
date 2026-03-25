@@ -1,0 +1,125 @@
+name: Percy Status Checker
+
+on:
+  workflow_run:
+    workflows: ["Visual Regression Testing"]
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  checks: write
+  actions: read
+
+jobs:
+  update-percy-status:
+    name: Update Percy Status
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request'
+    
+    steps:
+      - name: Get PR number
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pullRequests } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: `${context.repo.owner}:${context.payload.workflow_run.head_branch}`
+            });
+            
+            if (pullRequests.length > 0) {
+              return pullRequests[0].number;
+            }
+            return null;
+
+      - name: Download Percy logs
+        if: steps.pr.outputs.result
+        uses: actions/download-artifact@v4
+        with:
+          name: percy-logs-${{ github.event.workflow_run.id }}
+          path: ./percy-logs
+        continue-on-error: true
+
+      - name: Parse Percy results
+        if: steps.pr.outputs.result
+        id: percy-results
+        run: |
+          if [ -f "./percy-logs/percy-output.log" ]; then
+            BUILD_URL=$(grep -oP 'https://percy.io/[^\s]+' ./percy-logs/percy-output.log | head -1)
+            SNAPSHOTS=$(grep -c "Snapshot uploaded" ./percy-logs/percy-output.log || echo "0")
+            CHANGES=$(grep -c "visual changes" ./percy-logs/percy-output.log || echo "0")
+            
+            echo "build-url=${BUILD_URL}" >> $GITHUB_OUTPUT
+            echo "snapshots=${SNAPSHOTS}" >> $GITHUB_OUTPUT
+            echo "changes=${CHANGES}" >> $GITHUB_OUTPUT
+          else
+            echo "No Percy logs found"
+            echo "snapshots=0" >> $GITHUB_OUTPUT
+            echo "changes=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update PR with Percy status
+        if: steps.pr.outputs.result
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr.outputs.result }};
+            const buildUrl = '${{ steps.percy-results.outputs.build-url }}';
+            const snapshots = '${{ steps.percy-results.outputs.snapshots }}';
+            const changes = '${{ steps.percy-results.outputs.changes }}';
+            const conclusion = '${{ github.event.workflow_run.conclusion }}';
+            
+            const statusEmoji = conclusion === 'success' ? '✅' : '❌';
+            const changesText = changes === '0' ? 'No visual changes detected' : `${changes} visual changes detected`;
+            
+            const body = `## ${statusEmoji} Percy Visual Regression - Complete
+            
+            **Status:** ${conclusion}
+            **Snapshots:** ${snapshots}
+            **Changes:** ${changesText}
+            
+            ${buildUrl ? `[🔍 View detailed report on Percy →](${buildUrl})` : ''}
+            
+            ### Summary
+            
+            ${changes === '0' 
+              ? '✨ All visual tests passed with no changes detected. Your UI looks perfect!' 
+              : `⚠️ ${changes} visual differences were detected. Please review them carefully.`}
+            
+            ${conclusion === 'success' 
+              ? '### ✅ Visual regression tests passed\n\nYour changes have been visually validated across all breakpoints and themes.' 
+              : '### ❌ Visual regression tests failed\n\nSome visual tests did not pass. Please review the Percy build for details.'}
+            
+            ---
+            
+            <sub>This comment is automatically updated by the Percy Status Checker workflow.</sub>
+            `;
+            
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Percy Visual Regression - Complete')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: body
+              });
+            }

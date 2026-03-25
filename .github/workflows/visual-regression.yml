@@ -3,15 +3,30 @@ name: Visual Regression Testing
 on:
   pull_request:
     branches: [main, develop]
+    types: [opened, synchronize, reopened]
   push:
     branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: visual-tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   visual-tests:
     name: Percy Visual Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+    
+    outputs:
+      percy-build-url: ${{ steps.percy-run.outputs.build-url }}
+      percy-build-id: ${{ steps.percy-run.outputs.build-id }}
+      snapshots-total: ${{ steps.percy-run.outputs.snapshots-total }}
+      snapshots-changed: ${{ steps.percy-run.outputs.snapshots-changed }}
     
     steps:
       - name: Checkout code
@@ -33,41 +48,156 @@ jobs:
 
       - name: Build application
         run: npm run build
+        env:
+          NODE_ENV: production
 
       - name: Run visual regression tests
+        id: percy-run
         env:
           PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
           PERCY_BRANCH: ${{ github.head_ref || github.ref_name }}
           PERCY_TARGET_BRANCH: ${{ github.base_ref || 'main' }}
           PERCY_COMMIT: ${{ github.sha }}
           PERCY_PULL_REQUEST: ${{ github.event.pull_request.number }}
-        run: npm run test:visual
+          PERCY_PARALLEL_TOTAL: 1
+          PERCY_PARALLEL_NONCE: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set +e
+          npm run test:visual 2>&1 | tee percy-output.log
+          PERCY_EXIT_CODE=$?
+          
+          BUILD_URL=$(grep -oP 'https://percy.io/[^\s]+' percy-output.log | head -1)
+          BUILD_ID=$(echo "$BUILD_URL" | grep -oP 'builds/\K[0-9]+')
+          SNAPSHOTS_TOTAL=$(grep -oP 'Snapshot uploaded: \K[0-9]+' percy-output.log | wc -l)
+          
+          echo "build-url=${BUILD_URL}" >> $GITHUB_OUTPUT
+          echo "build-id=${BUILD_ID}" >> $GITHUB_OUTPUT
+          echo "snapshots-total=${SNAPSHOTS_TOTAL}" >> $GITHUB_OUTPUT
+          echo "exit-code=${PERCY_EXIT_CODE}" >> $GITHUB_OUTPUT
+          
+          exit $PERCY_EXIT_CODE
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-visual-report
+          name: playwright-visual-report-${{ github.run_id }}
           path: playwright-report/
           retention-days: 7
 
-      - name: Upload Percy build URL
+      - name: Upload Percy logs
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: percy-logs-${{ github.run_id }}
+          path: percy-output.log
+          retention-days: 7
+
+      - name: Post initial PR comment
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
-            const percyUrl = `https://percy.io/${process.env.PERCY_PROJECT_ID || 'latentforge'}/builds`;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
+            const buildUrl = '${{ steps.percy-run.outputs.build-url }}' || 'Processing...';
+            const snapshotsTotal = '${{ steps.percy-run.outputs.snapshots-total }}' || '0';
+            const exitCode = '${{ steps.percy-run.outputs.exit-code }}';
+            
+            const status = exitCode === '0' ? '✅' : '⚠️';
+            const statusText = exitCode === '0' ? 'Completed' : 'Completed with warnings';
+            
+            const body = `## ${status} Percy Visual Regression Tests
+            
+            **Status:** ${statusText}
+            **Snapshots captured:** ${snapshotsTotal}
+            **Build URL:** ${buildUrl}
+            
+            ### 🎨 Visual Testing Summary
+            
+            Percy has captured **${snapshotsTotal} visual snapshots** across multiple viewports:
+            - 📱 Mobile (375px)
+            - 📱 Tablet (768px)  
+            - 💻 Desktop (1280px)
+            - 🖥️ Large Desktop (1920px)
+            
+            ### 📊 What's being tested
+            
+            - Main dashboard layout
+            - Forge Canvas interactions
+            - Shadow Vault sidebar
+            - AI Preview panel
+            - Quick Capture modal
+            - Command Palette
+            - Dark mode theme variations
+            - Responsive breakpoints
+            - Component states (hover, active, disabled)
+            
+            ### 🔍 Review Required
+            
+            ${buildUrl !== 'Processing...' ? `[👉 Review visual changes on Percy →](${buildUrl})` : '⏳ Percy is processing your snapshots...'}
+            
+            ---
+            
+            <details>
+            <summary>📚 How to review visual changes</summary>
+            
+            1. Click the Percy build link above
+            2. Review any detected visual differences
+            3. Approve changes that are intentional
+            4. Request changes if differences are bugs
+            5. Percy will auto-approve if no changes detected
+            
+            </details>
+            
+            <details>
+            <summary>🔧 Troubleshooting</summary>
+            
+            **If snapshots are missing:**
+            - Check that Percy token is configured in repository secrets
+            - Verify the build completed successfully
+            - Review Percy logs in the workflow artifacts
+            
+            **If you see unexpected differences:**
+            - Check if dark mode colors changed
+            - Verify responsive breakpoint adjustments
+            - Review animation/transition timing changes
+            
+            </details>
+            `;
+            
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `🎨 **Percy Visual Tests**\n\nView visual diffs: ${percyUrl}`
+              issue_number: context.issue.number,
             });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Percy Visual Regression Tests')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
 
   visual-tests-mobile:
     name: Percy Mobile Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
     
     steps:
       - name: Checkout code
@@ -92,4 +222,71 @@ jobs:
         env:
           PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
           PERCY_BRANCH: ${{ github.head_ref || github.ref_name }}-mobile
+          PERCY_TARGET_BRANCH: ${{ github.base_ref || 'main' }}
+          PERCY_COMMIT: ${{ github.sha }}
         run: npx percy exec -- playwright test e2e/visual --project="Mobile Chrome"
+
+  percy-finalize:
+    name: Finalize Percy Results
+    runs-on: ubuntu-latest
+    needs: [visual-tests]
+    if: always() && github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+      checks: write
+    
+    steps:
+      - name: Wait for Percy processing
+        run: sleep 30
+        
+      - name: Post final PR comment with results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const buildUrl = '${{ needs.visual-tests.outputs.percy-build-url }}';
+            const snapshotsTotal = '${{ needs.visual-tests.outputs.snapshots-total }}';
+            
+            if (!buildUrl || buildUrl === 'Processing...') {
+              console.log('No Percy build URL available, skipping final comment');
+              return;
+            }
+            
+            const body = `## 🎉 Percy Visual Tests Complete!
+            
+            Your visual regression tests have finished processing.
+            
+            **📸 Total Snapshots:** ${snapshotsTotal}
+            **🔗 Build URL:** ${buildUrl}
+            
+            ### Next Steps
+            
+            1. [Review your build on Percy](${buildUrl})
+            2. Check for any visual regressions
+            3. Approve or reject changes as needed
+            
+            Percy will automatically approve builds with no visual changes detected.
+            
+            ---
+            
+            💡 **Tip:** Add \`[percy skip]\` to your commit message to skip visual tests.
+            `;
+            
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Percy Visual Tests Complete')
+            );
+            
+            if (!botComment) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }

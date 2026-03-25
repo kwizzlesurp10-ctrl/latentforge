@@ -295,6 +295,9 @@ npm run test:e2e
 # Visual regression tests with Percy
 npm run test:visual
 
+# Dark mode visual tests
+npm run test:visual:dark
+
 # All tests
 npm run test:all
 ```
@@ -304,13 +307,33 @@ npm run test:all
 - **[TESTING.md](./TESTING.md)** - Complete testing guide with examples
 - **[VISUAL_TESTING.md](./VISUAL_TESTING.md)** - Visual regression testing with Percy
 - **[PERCY_QUICKSTART.md](./PERCY_QUICKSTART.md)** - Get Percy running in 5 minutes
+- **[PERCY_CI_CD.md](./PERCY_CI_CD.md)** - Percy CI/CD integration & automatic PR comments
 
 ### Test Coverage
 
 - ✅ **Unit Tests**: Components, utilities, hooks
 - ✅ **E2E Tests**: User flows, canvas interactions, AI workflows
 - ✅ **Visual Tests**: UI consistency across 4 viewports, 3 browsers
-- ✅ **CI/CD**: Automated testing on every PR
+- ✅ **CI/CD**: Automated testing on every PR with Percy integration
+
+### Percy Visual Regression Testing
+
+LatentForge uses Percy for automated visual regression testing with intelligent PR comments:
+
+**Features:**
+- 📸 **Automatic snapshots** on every PR at 4 viewport sizes
+- 🔍 **Detailed PR comments** with snapshot counts, change detection, and review guidance
+- 🎨 **Theme testing** including dark mode and color variations
+- 📊 **Visual diff reports** highlighting pixel-level changes
+- ✅ **Auto-approval** for builds with no visual changes
+- 🤖 **GitHub integration** with status checks and required reviews
+
+**Setup (2 minutes):**
+1. Get your Percy token from [percy.io](https://percy.io)
+2. Add `PERCY_TOKEN` to repository secrets
+3. Percy automatically runs on all PRs
+
+See [PERCY_CI_CD.md](./PERCY_CI_CD.md) for complete setup and usage guide.
 
 ---
 
