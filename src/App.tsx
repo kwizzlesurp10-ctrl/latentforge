@@ -1,5 +1,5 @@
 import { useKV } from '@github/spark/hooks'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { VaultItem, CanvasNode, Connection } from '@/lib/types'
 import { VaultSidebar } from '@/components/vault/VaultSidebar'
 import { ForgeCanvas } from '@/components/canvas/ForgeCanvas'
@@ -11,6 +11,8 @@ import { Toaster } from '@/components/ui/sonner'
 import { Archive, Sparkle, GitBranch } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 
 function App() {
   const [vaultItems, setVaultItems] = useKV<VaultItem[]>('vault-items', [])
@@ -122,10 +124,57 @@ function App() {
     setIsAIPreviewOpen(true)
   }, [])
 
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setIsQuickCaptureOpen(true)
+        toast.info('Quick Capture opened', { duration: 1500 })
+      }
+      
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+        e.preventDefault()
+        setIsCommandOpen(true)
+        toast.info('Command Palette opened', { duration: 1500 })
+      }
+      
+      if ((e.metaKey || e.ctrlKey) && e.key === 't') {
+        e.preventDefault()
+        toast.info('Timeline coming soon!', { duration: 2000 })
+      }
+      
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault()
+        setIsSidebarOpen(prev => !prev)
+        toast.info(`Sidebar ${!isSidebarOpen ? 'opened' : 'closed'}`, { duration: 1500 })
+      }
+      
+      if (e.key === 'Escape') {
+        if (isQuickCaptureOpen) {
+          setIsQuickCaptureOpen(false)
+        } else if (isCommandOpen) {
+          setIsCommandOpen(false)
+        } else if (isAIPreviewOpen) {
+          setIsAIPreviewOpen(false)
+          setSelectedVaultItemId(null)
+          setSelectedCanvasNodeId(null)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [isQuickCaptureOpen, isCommandOpen, isAIPreviewOpen, isSidebarOpen])
+
   return (
     <TooltipProvider delayDuration={100}>
       <div className="h-screen w-screen overflow-hidden bg-background text-foreground flex flex-col">
-        <header className="h-14 border-b border-border bg-card flex items-center justify-between px-4 shrink-0">
+        <motion.header 
+          className="h-14 border-b border-border bg-card flex items-center justify-between px-4 shrink-0"
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -183,7 +232,7 @@ function App() {
               <span className="ml-2 text-xs text-primary-foreground/70">⌘K</span>
             </Button>
           </div>
-        </header>
+        </motion.header>
 
         <div className="flex-1 flex overflow-hidden">
           <VaultSidebar

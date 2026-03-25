@@ -1,9 +1,11 @@
 import { CanvasNode, Connection } from '@/lib/types'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Plus, TextT, Code, Image as ImageIcon } from '@phosphor-icons/react'
+import { Plus, TextT, Code, Image as ImageIcon, ArrowsOutSimple, FrameCorners, MapTrifold, CornersOut } from '@phosphor-icons/react'
 import { CanvasNodeComponent } from './CanvasNode'
 import { cn } from '@/lib/utils'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface ForgeCanvasProps {
   nodes: CanvasNode[]
@@ -29,44 +31,124 @@ export function ForgeCanvas({
   const [zoom, setZoom] = useState(1)
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
+  const [isSelecting, setIsSelecting] = useState(false)
+  const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 })
+  const [selectionEnd, setSelectionEnd] = useState({ x: 0, y: 0 })
+  const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set())
+  const [showMinimap, setShowMinimap] = useState(false)
+  const [isDraggingCanvas, setIsDraggingCanvas] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
+  const minimapRef = useRef<HTMLCanvasElement>(null)
 
-  const handleWheel = (e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault()
+    
     if (e.ctrlKey || e.metaKey) {
-      e.preventDefault()
-      const delta = e.deltaY * -0.001
-      const newZoom = Math.min(Math.max(zoom + delta, 0.25), 2)
+      const rect = canvasRef.current?.getBoundingClientRect()
+      if (!rect) return
+      
+      const mouseX = e.clientX - rect.left
+      const mouseY = e.clientY - rect.top
+      
+      const delta = e.deltaY * -0.002
+      const newZoom = Math.min(Math.max(zoom + delta, 0.1), 3)
+      
+      const zoomFactor = newZoom / zoom
+      
+      setPan({
+        x: mouseX - (mouseX - pan.x) * zoomFactor,
+        y: mouseY - (mouseY - pan.y) * zoomFactor,
+      })
+      
       setZoom(newZoom)
     } else {
       setPan({
-        x: pan.x - e.deltaX,
-        y: pan.y - e.deltaY,
+        x: pan.x - e.deltaX * 0.5,
+        y: pan.y - e.deltaY * 0.5,
       })
     }
-  }
+  }, [pan, zoom])
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.target === canvasRef.current || (e.target as HTMLElement).closest('.canvas-background')) {
-      setIsPanning(true)
-      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
-      onSelectNode(null)
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement
+    
+    if (target === canvasRef.current || target.closest('.canvas-background')) {
+      if (e.shiftKey) {
+        setIsSelecting(true)
+        const rect = canvasRef.current?.getBoundingClientRect()
+        if (rect) {
+          setSelectionStart({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+          })
+          setSelectionEnd({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+          })
+        }
+      } else {
+        setIsDraggingCanvas(true)
+        setIsPanning(true)
+        setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
+        onSelectNode(null)
+        setSelectedNodes(new Set())
+      }
     }
-  }
+  }, [pan, onSelectNode])
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isPanning) {
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isPanning && isDraggingCanvas) {
       setPan({
         x: e.clientX - panStart.x,
         y: e.clientY - panStart.y,
       })
+    } else if (isSelecting) {
+      const rect = canvasRef.current?.getBoundingClientRect()
+      if (rect) {
+        setSelectionEnd({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        })
+      }
     }
-  }
+  }, [isPanning, isDraggingCanvas, isSelecting, panStart])
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
+    if (isSelecting) {
+      const rect = canvasRef.current?.getBoundingClientRect()
+      if (rect) {
+        const minX = Math.min(selectionStart.x, selectionEnd.x)
+        const maxX = Math.max(selectionStart.x, selectionEnd.x)
+        const minY = Math.min(selectionStart.y, selectionEnd.y)
+        const maxY = Math.max(selectionStart.y, selectionEnd.y)
+        
+        const selected = new Set<string>()
+        nodes.forEach(node => {
+          const nodeScreenX = node.position.x * zoom + pan.x
+          const nodeScreenY = node.position.y * zoom + pan.y
+          const nodeScreenW = node.size.width * zoom
+          const nodeScreenH = node.size.height * zoom
+          
+          if (
+            nodeScreenX + nodeScreenW > minX &&
+            nodeScreenX < maxX &&
+            nodeScreenY + nodeScreenH > minY &&
+            nodeScreenY < maxY
+          ) {
+            selected.add(node.id)
+          }
+        })
+        
+        setSelectedNodes(selected)
+      }
+      setIsSelecting(false)
+    }
+    
     setIsPanning(false)
-  }
+    setIsDraggingCanvas(false)
+  }, [isSelecting, selectionStart, selectionEnd, nodes, zoom, pan])
 
-  const addNode = (type: CanvasNode['type']) => {
+  const addNode = useCallback((type: CanvasNode['type']) => {
     const canvasRect = canvasRef.current?.getBoundingClientRect()
     const centerX = canvasRect ? canvasRect.width / 2 : 400
     const centerY = canvasRect ? canvasRect.height / 2 : 300
@@ -83,84 +165,297 @@ export function ForgeCanvas({
     })
 
     onSelectNode(newNode.id)
-  }
+  }, [onAddNode, onSelectNode, pan, zoom])
+
+  const centerCanvas = useCallback(() => {
+    if (nodes.length === 0) {
+      setPan({ x: 0, y: 0 })
+      setZoom(1)
+      return
+    }
+    
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    
+    nodes.forEach(node => {
+      minX = Math.min(minX, node.position.x)
+      minY = Math.min(minY, node.position.y)
+      maxX = Math.max(maxX, node.position.x + node.size.width)
+      maxY = Math.max(maxY, node.position.y + node.size.height)
+    })
+    
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    
+    const centerX = (minX + maxX) / 2
+    const centerY = (minY + maxY) / 2
+    const width = maxX - minX
+    const height = maxY - minY
+    
+    const zoomX = (rect.width * 0.8) / width
+    const zoomY = (rect.height * 0.8) / height
+    const newZoom = Math.min(Math.max(Math.min(zoomX, zoomY), 0.1), 2)
+    
+    setPan({
+      x: rect.width / 2 - centerX * newZoom,
+      y: rect.height / 2 - centerY * newZoom,
+    })
+    setZoom(newZoom)
+  }, [nodes])
+
+  const drawMinimap = useCallback(() => {
+    const canvas = minimapRef.current
+    if (!canvas || nodes.length === 0) return
+    
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    
+    const width = 200
+    const height = 150
+    canvas.width = width
+    canvas.height = height
+    
+    ctx.fillStyle = 'oklch(0.18 0.02 270)'
+    ctx.fillRect(0, 0, width, height)
+    
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    
+    nodes.forEach(node => {
+      minX = Math.min(minX, node.position.x)
+      minY = Math.min(minY, node.position.y)
+      maxX = Math.max(maxX, node.position.x + node.size.width)
+      maxY = Math.max(maxY, node.position.y + node.size.height)
+    })
+    
+    const scaleX = width / (maxX - minX + 100)
+    const scaleY = height / (maxY - minY + 100)
+    const scale = Math.min(scaleX, scaleY)
+    
+    nodes.forEach(node => {
+      const x = (node.position.x - minX + 50) * scale
+      const y = (node.position.y - minY + 50) * scale
+      const w = node.size.width * scale
+      const h = node.size.height * scale
+      
+      ctx.fillStyle = selectedNodeId === node.id ? 'oklch(0.65 0.28 330)' : 'oklch(0.25 0.05 270)'
+      ctx.fillRect(x, y, w, h)
+      
+      ctx.strokeStyle = 'oklch(0.65 0.28 330 / 0.5)'
+      ctx.lineWidth = 1
+      ctx.strokeRect(x, y, w, h)
+    })
+  }, [nodes, selectedNodeId])
+
+  useEffect(() => {
+    if (showMinimap) {
+      drawMinimap()
+    }
+  }, [showMinimap, drawMinimap])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === '0') {
         e.preventDefault()
-        setZoom(1)
-        setPan({ x: 0, y: 0 })
+        centerCanvas()
       }
-      if (e.key === 'Delete' && selectedNodeId) {
-        onDeleteNode(selectedNodeId)
+      
+      if ((e.metaKey || e.ctrlKey) && e.key === 'm') {
+        e.preventDefault()
+        setShowMinimap(prev => !prev)
+      }
+      
+      if ((e.metaKey || e.ctrlKey) && e.key === '=') {
+        e.preventDefault()
+        setZoom(prev => Math.min(prev + 0.1, 3))
+      }
+      
+      if ((e.metaKey || e.ctrlKey) && e.key === '-') {
+        e.preventDefault()
+        setZoom(prev => Math.max(prev - 0.1, 0.1))
+      }
+      
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedNodeId) {
+          e.preventDefault()
+          onDeleteNode(selectedNodeId)
+          onSelectNode(null)
+        } else if (selectedNodes.size > 0) {
+          e.preventDefault()
+          selectedNodes.forEach(id => onDeleteNode(id))
+          setSelectedNodes(new Set())
+        }
+      }
+      
+      if (e.key === 'Escape') {
         onSelectNode(null)
+        setSelectedNodes(new Set())
+      }
+      
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+        e.preventDefault()
+        const allNodeIds = new Set(nodes.map(n => n.id))
+        setSelectedNodes(allNodeIds)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedNodeId, onDeleteNode])
+  }, [selectedNodeId, selectedNodes, onDeleteNode, onSelectNode, centerCanvas, nodes])
 
   return (
     <div data-testid="forge-canvas" className="flex-1 flex flex-col bg-background relative overflow-hidden">
-      <div className="absolute top-4 left-4 z-10 flex gap-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => addNode('text')}
-          className="glow-hover shadow-lg"
-        >
-          <TextT size={16} weight="duotone" className="mr-1" />
-          Text
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => addNode('code')}
-          className="glow-hover shadow-lg"
-        >
-          <Code size={16} weight="duotone" className="mr-1" />
-          Code
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => addNode('image')}
-          className="glow-hover shadow-lg"
-        >
-          <ImageIcon size={16} weight="duotone" className="mr-1" />
-          Image
-        </Button>
-      </div>
+      <motion.div 
+        className="absolute top-4 left-4 z-10 flex gap-2"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => addNode('text')}
+              className="glow-hover shadow-lg"
+            >
+              <TextT size={16} weight="duotone" className="mr-1" />
+              Text
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Add text node</TooltipContent>
+        </Tooltip>
 
-      <div className="absolute bottom-4 right-4 z-10 flex items-center gap-2 bg-card border border-border rounded-md px-3 py-2 text-sm shadow-lg">
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-6 w-6"
-          onClick={() => setZoom(Math.max(zoom - 0.1, 0.25))}
-        >
-          <span className="text-lg">−</span>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => addNode('code')}
+              className="glow-hover shadow-lg"
+            >
+              <Code size={16} weight="duotone" className="mr-1" />
+              Code
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Add code node</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => addNode('image')}
+              className="glow-hover shadow-lg"
+            >
+              <ImageIcon size={16} weight="duotone" className="mr-1" />
+              Image
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Add image node</TooltipContent>
+        </Tooltip>
+      </motion.div>
+
+      <motion.div 
+        className="absolute bottom-4 left-4 z-10 flex items-center gap-2"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.1 }}
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="secondary"
+              onClick={() => setShowMinimap(prev => !prev)}
+              className={cn("shadow-lg", showMinimap && "bg-primary text-primary-foreground")}
+            >
+              <MapTrifold size={18} weight="duotone" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            Toggle minimap <span className="text-muted-foreground ml-2">⌘M</span>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="secondary"
+              onClick={centerCanvas}
+              className="shadow-lg"
+            >
+              <CornersOut size={18} weight="duotone" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            Fit all nodes <span className="text-muted-foreground ml-2">⌘0</span>
+          </TooltipContent>
+        </Tooltip>
+      </motion.div>
+
+      <motion.div 
+        className="absolute bottom-4 right-4 z-10 flex items-center gap-2 bg-card border border-border rounded-md px-3 py-2 text-sm shadow-lg"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.2 }}
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6"
+              onClick={() => setZoom(Math.max(zoom - 0.1, 0.1))}
+            >
+              <span className="text-lg">−</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            Zoom out <span className="text-muted-foreground ml-2">⌘-</span>
+          </TooltipContent>
+        </Tooltip>
+        
         <span className="font-mono text-xs w-12 text-center">
           {Math.round(zoom * 100)}%
         </span>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-6 w-6"
-          onClick={() => setZoom(Math.min(zoom + 0.1, 2))}
-        >
-          <span className="text-lg">+</span>
-        </Button>
-      </div>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6"
+              onClick={() => setZoom(Math.min(zoom + 0.1, 3))}
+            >
+              <span className="text-lg">+</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            Zoom in <span className="text-muted-foreground ml-2">⌘=</span>
+          </TooltipContent>
+        </Tooltip>
+      </motion.div>
+
+      <AnimatePresence>
+        {showMinimap && (
+          <motion.div 
+            className="absolute top-4 right-4 z-10 border-2 border-border rounded-md overflow-hidden shadow-lg"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.2 }}
+          >
+            <canvas ref={minimapRef} className="block" />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div
         ref={canvasRef}
         className={cn(
           'flex-1 relative overflow-hidden',
-          isPanning ? 'cursor-grabbing' : 'cursor-grab'
+          isDraggingCanvas ? 'cursor-grabbing' : isSelecting ? 'cursor-crosshair' : 'cursor-grab'
         )}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
@@ -183,6 +478,14 @@ export function ForgeCanvas({
           className="absolute inset-0 pointer-events-none"
           style={{ zIndex: 1 }}
         >
+          <defs>
+            <linearGradient id="connection-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="oklch(0.75 0.15 195)" stopOpacity="0.3" />
+              <stop offset="50%" stopColor="oklch(0.65 0.28 330)" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="oklch(0.75 0.15 195)" stopOpacity="0.3" />
+            </linearGradient>
+          </defs>
+          
           {connections.map((conn) => {
             const sourceNode = nodes.find((n) => n.id === conn.source)
             const targetNode = nodes.find((n) => n.id === conn.target)
@@ -194,20 +497,51 @@ export function ForgeCanvas({
             const x2 = (targetNode.position.x + targetNode.size.width / 2) * zoom + pan.x
             const y2 = (targetNode.position.y + targetNode.size.height / 2) * zoom + pan.y
 
+            const midX = (x1 + x2) / 2
+            const midY = (y1 + y2) / 2
+            const dx = x2 - x1
+            const dy = y2 - y1
+            const dist = Math.sqrt(dx * dx + dy * dy)
+            const curve = Math.min(dist * 0.25, 100)
+
             return (
-              <line
-                key={conn.id}
-                x1={x1}
-                y1={y1}
-                x2={x2}
-                y2={y2}
-                stroke="oklch(0.75 0.15 195)"
-                strokeWidth={2}
-                opacity={0.5}
-              />
+              <g key={conn.id}>
+                <path
+                  d={`M ${x1} ${y1} Q ${midX} ${midY - curve} ${x2} ${y2}`}
+                  stroke="url(#connection-gradient)"
+                  strokeWidth={2}
+                  fill="none"
+                />
+                <circle
+                  cx={midX}
+                  cy={midY - curve / 2}
+                  r={3}
+                  fill="oklch(0.65 0.28 330)"
+                  opacity={0.8}
+                >
+                  <animate
+                    attributeName="r"
+                    values="3;5;3"
+                    dur="2s"
+                    repeatCount="indefinite"
+                  />
+                </circle>
+              </g>
             )
           })}
         </svg>
+
+        {isSelecting && (
+          <div
+            className="absolute border-2 border-primary bg-primary/10 pointer-events-none z-50"
+            style={{
+              left: Math.min(selectionStart.x, selectionEnd.x),
+              top: Math.min(selectionStart.y, selectionEnd.y),
+              width: Math.abs(selectionEnd.x - selectionStart.x),
+              height: Math.abs(selectionEnd.y - selectionStart.y),
+            }}
+          />
+        )}
 
         <div
           className="absolute"
@@ -217,30 +551,41 @@ export function ForgeCanvas({
             zIndex: 2,
           }}
         >
-          {nodes.map((node) => (
-            <CanvasNodeComponent
-              key={node.id}
-              node={node}
-              isSelected={selectedNodeId === node.id}
-              onSelect={() => onSelectNode(node.id)}
-              onUpdate={(updates) => onUpdateNode(node.id, updates)}
-              onDelete={() => onDeleteNode(node.id)}
-            />
-          ))}
+          <AnimatePresence mode="popLayout">
+            {nodes.map((node) => (
+              <CanvasNodeComponent
+                key={node.id}
+                node={node}
+                isSelected={selectedNodeId === node.id || selectedNodes.has(node.id)}
+                onSelect={() => onSelectNode(node.id)}
+                onUpdate={(updates) => onUpdateNode(node.id, updates)}
+                onDelete={() => onDeleteNode(node.id)}
+                zoom={zoom}
+              />
+            ))}
+          </AnimatePresence>
         </div>
 
         {nodes.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <motion.div 
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+          >
             <div className="text-center">
               <Plus size={48} weight="duotone" className="text-muted-foreground mx-auto mb-4 opacity-30" />
               <p className="text-muted-foreground text-sm">
                 Click a button above to add your first node
               </p>
               <p className="text-muted-foreground text-xs mt-2">
-                Scroll to pan • Cmd+Scroll to zoom • Cmd+0 to reset
+                Scroll to pan • ⌘+Scroll to zoom • ⌘+0 to fit all
+              </p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Shift+Drag to lasso select • ⌘M for minimap
               </p>
             </div>
-          </div>
+          </motion.div>
         )}
       </div>
     </div>
