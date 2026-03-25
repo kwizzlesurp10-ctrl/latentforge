@@ -11,7 +11,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { Archive, Sparkle, GitBranch } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 
 function App() {
@@ -126,16 +126,17 @@ function App() {
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      const isInputField = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+      
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
         setIsQuickCaptureOpen(true)
-        toast.info('Quick Capture opened', { duration: 1500 })
       }
       
       if ((e.metaKey || e.ctrlKey) && e.key === '/') {
         e.preventDefault()
         setIsCommandOpen(true)
-        toast.info('Command Palette opened', { duration: 1500 })
       }
       
       if ((e.metaKey || e.ctrlKey) && e.key === 't') {
@@ -145,8 +146,20 @@ function App() {
       
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
         e.preventDefault()
-        setIsSidebarOpen(prev => !prev)
-        toast.info(`Sidebar ${!isSidebarOpen ? 'opened' : 'closed'}`, { duration: 1500 })
+        setIsSidebarOpen(prev => {
+          const newState = !prev
+          toast.info(`Sidebar ${newState ? 'opened' : 'closed'}`, { duration: 1500 })
+          return newState
+        })
+      }
+      
+      if ((e.metaKey || e.ctrlKey) && e.key === 'p' && e.shiftKey) {
+        e.preventDefault()
+        setIsAIPreviewOpen(prev => {
+          const newState = !prev
+          toast.info(`AI Preview ${newState ? 'opened' : 'closed'}`, { duration: 1500 })
+          return newState
+        })
       }
       
       if (e.key === 'Escape') {
@@ -158,37 +171,70 @@ function App() {
           setIsAIPreviewOpen(false)
           setSelectedVaultItemId(null)
           setSelectedCanvasNodeId(null)
+        } else if (selectedCanvasNodeId || selectedVaultItemId) {
+          setSelectedVaultItemId(null)
+          setSelectedCanvasNodeId(null)
+        }
+      }
+      
+      if (!isInputField && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        if (selectedVaultItemId && (vaultItems?.length ?? 0) > 0) {
+          e.preventDefault()
+          const currentIndex = vaultItems?.findIndex(item => item.id === selectedVaultItemId) ?? -1
+          if (currentIndex !== -1) {
+            let newIndex = currentIndex
+            if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+              newIndex = Math.min((vaultItems?.length ?? 0) - 1, currentIndex + 1)
+            } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+              newIndex = Math.max(0, currentIndex - 1)
+            }
+            if (newIndex !== currentIndex && vaultItems) {
+              setSelectedVaultItemId(vaultItems[newIndex].id)
+            }
+          }
         }
       }
     }
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [isQuickCaptureOpen, isCommandOpen, isAIPreviewOpen, isSidebarOpen])
+  }, [isQuickCaptureOpen, isCommandOpen, isAIPreviewOpen, isSidebarOpen, selectedVaultItemId, selectedCanvasNodeId, vaultItems])
 
   return (
     <TooltipProvider delayDuration={100}>
       <div className="h-screen w-screen overflow-hidden bg-background text-foreground flex flex-col">
         <motion.header 
-          className="h-14 border-b border-border bg-card flex items-center justify-between px-4 shrink-0"
+          className="h-14 border-b border-border bg-card flex items-center justify-between px-4 shrink-0 relative z-20"
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
         >
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="glow-hover"
-              aria-label="Toggle vault sidebar"
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                  className="glow-hover transition-all duration-200"
+                  aria-label="Toggle vault sidebar"
+                >
+                  <Archive size={20} weight="duotone" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Toggle Vault <span className="text-muted-foreground ml-2">⌘B</span></p>
+              </TooltipContent>
+            </Tooltip>
+            <motion.h1 
+              className="text-xl font-bold tracking-tight font-display"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
             >
-              <Archive size={20} weight="duotone" />
-            </Button>
-            <h1 className="text-xl font-bold tracking-tight font-display">
               <span className="text-primary">Latent</span>
               <span className="text-secondary">Forge</span>
-            </h1>
+            </motion.h1>
           </div>
 
           <div className="flex items-center gap-2">
@@ -198,7 +244,7 @@ function App() {
                   variant="ghost"
                   size="icon"
                   onClick={() => setIsCommandOpen(true)}
-                  className="glow-hover"
+                  className="glow-hover transition-all duration-200"
                 >
                   <Sparkle size={20} weight="duotone" />
                 </Button>
@@ -213,7 +259,8 @@ function App() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="glow-hover"
+                  onClick={() => toast.info('Timeline coming soon!', { duration: 2000 })}
+                  className="glow-hover transition-all duration-200"
                 >
                   <GitBranch size={20} weight="duotone" />
                 </Button>
@@ -225,7 +272,7 @@ function App() {
 
             <Button
               onClick={() => setIsQuickCaptureOpen(true)}
-              className="glow-primary ml-2"
+              className="glow-primary ml-2 transition-all duration-200 hover:scale-105"
               size="sm"
             >
               Quick Capture
@@ -234,19 +281,30 @@ function App() {
           </div>
         </motion.header>
 
-        <div className="flex-1 flex overflow-hidden">
-          <VaultSidebar
-            items={vaultItems || []}
-            isOpen={isSidebarOpen}
-            onAddItem={addVaultItem}
-            onUpdateItem={updateVaultItem}
-            onDeleteItem={deleteVaultItem}
-            onClose={() => setIsSidebarOpen(false)}
-            selectedItemId={selectedVaultItemId}
-            onSelectItem={handleSelectVaultItem}
-            typeFilter={vaultTypeFilter}
-            onClearTypeFilter={() => setVaultTypeFilter(null)}
-          />
+        <div className="flex-1 flex overflow-hidden relative">
+          <AnimatePresence mode="wait">
+            {isSidebarOpen && (
+              <motion.div
+                initial={{ x: -300, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -300, opacity: 0 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+              >
+                <VaultSidebar
+                  items={vaultItems || []}
+                  isOpen={isSidebarOpen}
+                  onAddItem={addVaultItem}
+                  onUpdateItem={updateVaultItem}
+                  onDeleteItem={deleteVaultItem}
+                  onClose={() => setIsSidebarOpen(false)}
+                  selectedItemId={selectedVaultItemId}
+                  onSelectItem={handleSelectVaultItem}
+                  typeFilter={vaultTypeFilter}
+                  onClearTypeFilter={() => setVaultTypeFilter(null)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <ForgeCanvas
             nodes={canvasNodes || []}
@@ -259,17 +317,26 @@ function App() {
             onSelectNode={handleSelectCanvasNode}
           />
 
-          {isAIPreviewOpen && (
-            <AIPreviewPanel
-              selectedItem={selectedVaultItem}
-              selectedNode={selectedCanvasNode}
-              onClose={() => {
-                setIsAIPreviewOpen(false)
-                setSelectedVaultItemId(null)
-                setSelectedCanvasNodeId(null)
-              }}
-            />
-          )}
+          <AnimatePresence mode="wait">
+            {isAIPreviewOpen && (selectedVaultItem || selectedCanvasNode) && (
+              <motion.div
+                initial={{ x: 400, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 400, opacity: 0 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+              >
+                <AIPreviewPanel
+                  selectedItem={selectedVaultItem}
+                  selectedNode={selectedCanvasNode}
+                  onClose={() => {
+                    setIsAIPreviewOpen(false)
+                    setSelectedVaultItemId(null)
+                    setSelectedCanvasNodeId(null)
+                  }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <QuickCapture

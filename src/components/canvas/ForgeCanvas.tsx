@@ -1,11 +1,12 @@
 import { CanvasNode, Connection } from '@/lib/types'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Plus, TextT, Code, Image as ImageIcon, ArrowsOutSimple, FrameCorners, MapTrifold, CornersOut } from '@phosphor-icons/react'
+import { Plus, TextT, Code, Image as ImageIcon, MapTrifold, CornersOut, Hand, Selection, Target } from '@phosphor-icons/react'
 import { CanvasNodeComponent } from './CanvasNode'
 import { cn } from '@/lib/utils'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useSpring, useMotionValue } from 'framer-motion'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { toast } from 'sonner'
 
 interface ForgeCanvasProps {
   nodes: CanvasNode[]
@@ -27,7 +28,8 @@ export function ForgeCanvas({
   selectedNodeId,
   onSelectNode,
 }: ForgeCanvasProps) {
-  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const panX = useMotionValue(0)
+  const panY = useMotionValue(0)
   const [zoom, setZoom] = useState(1)
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
@@ -37,8 +39,11 @@ export function ForgeCanvas({
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set())
   const [showMinimap, setShowMinimap] = useState(false)
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false)
+  const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>('pan')
   const canvasRef = useRef<HTMLDivElement>(null)
   const minimapRef = useRef<HTMLCanvasElement>(null)
+  
+  const smoothZoom = useSpring(zoom, { stiffness: 300, damping: 30 })
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
@@ -50,30 +55,32 @@ export function ForgeCanvas({
       const mouseX = e.clientX - rect.left
       const mouseY = e.clientY - rect.top
       
-      const delta = e.deltaY * -0.002
+      const delta = e.deltaY * -0.003
       const newZoom = Math.min(Math.max(zoom + delta, 0.1), 3)
       
       const zoomFactor = newZoom / zoom
       
-      setPan({
-        x: mouseX - (mouseX - pan.x) * zoomFactor,
-        y: mouseY - (mouseY - pan.y) * zoomFactor,
-      })
+      const currentPanX = panX.get()
+      const currentPanY = panY.get()
+      
+      panX.set(mouseX - (mouseX - currentPanX) * zoomFactor)
+      panY.set(mouseY - (mouseY - currentPanY) * zoomFactor)
       
       setZoom(newZoom)
     } else {
-      setPan({
-        x: pan.x - e.deltaX * 0.5,
-        y: pan.y - e.deltaY * 0.5,
-      })
+      const currentPanX = panX.get()
+      const currentPanY = panY.get()
+      
+      panX.set(currentPanX - e.deltaX * 0.5)
+      panY.set(currentPanY - e.deltaY * 0.5)
     }
-  }, [pan, zoom])
+  }, [panX, panY, zoom])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement
     
     if (target === canvasRef.current || target.closest('.canvas-background')) {
-      if (e.shiftKey) {
+      if (interactionMode === 'select' || e.shiftKey) {
         setIsSelecting(true)
         const rect = canvasRef.current?.getBoundingClientRect()
         if (rect) {
@@ -89,19 +96,17 @@ export function ForgeCanvas({
       } else {
         setIsDraggingCanvas(true)
         setIsPanning(true)
-        setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
+        setPanStart({ x: e.clientX - panX.get(), y: e.clientY - panY.get() })
         onSelectNode(null)
         setSelectedNodes(new Set())
       }
     }
-  }, [pan, onSelectNode])
+  }, [panX, panY, interactionMode, onSelectNode])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isPanning && isDraggingCanvas) {
-      setPan({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y,
-      })
+      panX.set(e.clientX - panStart.x)
+      panY.set(e.clientY - panStart.y)
     } else if (isSelecting) {
       const rect = canvasRef.current?.getBoundingClientRect()
       if (rect) {
@@ -111,7 +116,7 @@ export function ForgeCanvas({
         })
       }
     }
-  }, [isPanning, isDraggingCanvas, isSelecting, panStart])
+  }, [isPanning, isDraggingCanvas, isSelecting, panStart, panX, panY])
 
   const handleMouseUp = useCallback(() => {
     if (isSelecting) {
@@ -123,9 +128,12 @@ export function ForgeCanvas({
         const maxY = Math.max(selectionStart.y, selectionEnd.y)
         
         const selected = new Set<string>()
+        const currentPanX = panX.get()
+        const currentPanY = panY.get()
+        
         nodes.forEach(node => {
-          const nodeScreenX = node.position.x * zoom + pan.x
-          const nodeScreenY = node.position.y * zoom + pan.y
+          const nodeScreenX = node.position.x * zoom + currentPanX
+          const nodeScreenY = node.position.y * zoom + currentPanY
           const nodeScreenW = node.size.width * zoom
           const nodeScreenH = node.size.height * zoom
           
@@ -140,36 +148,44 @@ export function ForgeCanvas({
         })
         
         setSelectedNodes(selected)
+        if (selected.size > 0) {
+          toast.success(`Selected ${selected.size} node${selected.size > 1 ? 's' : ''}`)
+        }
       }
       setIsSelecting(false)
     }
     
     setIsPanning(false)
     setIsDraggingCanvas(false)
-  }, [isSelecting, selectionStart, selectionEnd, nodes, zoom, pan])
+  }, [isSelecting, selectionStart, selectionEnd, nodes, zoom, panX, panY])
 
   const addNode = useCallback((type: CanvasNode['type']) => {
     const canvasRect = canvasRef.current?.getBoundingClientRect()
     const centerX = canvasRect ? canvasRect.width / 2 : 400
     const centerY = canvasRect ? canvasRect.height / 2 : 300
 
+    const currentPanX = panX.get()
+    const currentPanY = panY.get()
+
     const newNode = onAddNode({
       type,
       content: type === 'code' ? '// Start coding...' : type === 'text' ? 'Type your idea...' : '',
       position: {
-        x: (centerX - pan.x) / zoom - 150,
-        y: (centerY - pan.y) / zoom - 75,
+        x: (centerX - currentPanX) / zoom - 150,
+        y: (centerY - currentPanY) / zoom - 75,
       },
       size: { width: 300, height: 150 },
       connections: [],
     })
 
     onSelectNode(newNode.id)
-  }, [onAddNode, onSelectNode, pan, zoom])
+    toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} node added`)
+  }, [onAddNode, onSelectNode, panX, panY, zoom])
 
   const centerCanvas = useCallback(() => {
     if (nodes.length === 0) {
-      setPan({ x: 0, y: 0 })
+      panX.set(0)
+      panY.set(0)
       setZoom(1)
       return
     }
@@ -195,12 +211,27 @@ export function ForgeCanvas({
     const zoomY = (rect.height * 0.8) / height
     const newZoom = Math.min(Math.max(Math.min(zoomX, zoomY), 0.1), 2)
     
-    setPan({
-      x: rect.width / 2 - centerX * newZoom,
-      y: rect.height / 2 - centerY * newZoom,
-    })
+    panX.set(rect.width / 2 - centerX * newZoom)
+    panY.set(rect.height / 2 - centerY * newZoom)
     setZoom(newZoom)
-  }, [nodes])
+    toast.success('Canvas centered')
+  }, [nodes, panX, panY])
+
+  const focusNode = useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId)
+    if (!node) return
+    
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    
+    const nodeCenterX = node.position.x + node.size.width / 2
+    const nodeCenterY = node.position.y + node.size.height / 2
+    
+    panX.set(rect.width / 2 - nodeCenterX * zoom)
+    panY.set(rect.height / 2 - nodeCenterY * zoom)
+    
+    onSelectNode(nodeId)
+  }, [nodes, zoom, panX, panY, onSelectNode])
 
   const drawMinimap = useCallback(() => {
     const canvas = minimapRef.current
@@ -243,11 +274,26 @@ export function ForgeCanvas({
       ctx.lineWidth = 1
       ctx.strokeRect(x, y, w, h)
     })
-  }, [nodes, selectedNodeId])
+    
+    const currentPanX = panX.get()
+    const currentPanY = panY.get()
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (rect) {
+      const viewX = ((-currentPanX / zoom) - minX + 50) * scale
+      const viewY = ((-currentPanY / zoom) - minY + 50) * scale
+      const viewW = (rect.width / zoom) * scale
+      const viewH = (rect.height / zoom) * scale
+      
+      ctx.strokeStyle = 'oklch(0.75 0.15 195)'
+      ctx.lineWidth = 2
+      ctx.strokeRect(viewX, viewY, viewW, viewH)
+    }
+  }, [nodes, selectedNodeId, panX, panY, zoom])
 
   useEffect(() => {
     if (showMinimap) {
-      drawMinimap()
+      const interval = setInterval(drawMinimap, 100)
+      return () => clearInterval(interval)
     }
   }, [showMinimap, drawMinimap])
 
@@ -261,6 +307,7 @@ export function ForgeCanvas({
       if ((e.metaKey || e.ctrlKey) && e.key === 'm') {
         e.preventDefault()
         setShowMinimap(prev => !prev)
+        toast.info(`Minimap ${!showMinimap ? 'enabled' : 'disabled'}`)
       }
       
       if ((e.metaKey || e.ctrlKey) && e.key === '=') {
@@ -278,10 +325,12 @@ export function ForgeCanvas({
           e.preventDefault()
           onDeleteNode(selectedNodeId)
           onSelectNode(null)
+          toast.success('Node deleted')
         } else if (selectedNodes.size > 0) {
           e.preventDefault()
           selectedNodes.forEach(id => onDeleteNode(id))
           setSelectedNodes(new Set())
+          toast.success(`${selectedNodes.size} nodes deleted`)
         }
       }
       
@@ -294,12 +343,36 @@ export function ForgeCanvas({
         e.preventDefault()
         const allNodeIds = new Set(nodes.map(n => n.id))
         setSelectedNodes(allNodeIds)
+        toast.success(`Selected all ${allNodeIds.size} nodes`)
+      }
+      
+      if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
+        setInteractionMode(prev => {
+          const newMode = prev === 'pan' ? 'select' : 'pan'
+          toast.info(`${newMode === 'pan' ? 'Pan' : 'Select'} mode activated`)
+          return newMode
+        })
+      }
+      
+      if (e.key === ' ' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        setInteractionMode('pan')
+      }
+    }
+    
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ') {
+        setInteractionMode('pan')
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedNodeId, selectedNodes, onDeleteNode, onSelectNode, centerCanvas, nodes])
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [selectedNodeId, selectedNodes, onDeleteNode, onSelectNode, centerCanvas, nodes, showMinimap])
 
   return (
     <div data-testid="forge-canvas" className="flex-1 flex flex-col bg-background relative overflow-hidden">
@@ -366,7 +439,30 @@ export function ForgeCanvas({
             <Button
               size="icon"
               variant="secondary"
-              onClick={() => setShowMinimap(prev => !prev)}
+              onClick={() => {
+                const newMode = interactionMode === 'pan' ? 'select' : 'pan'
+                setInteractionMode(newMode)
+                toast.info(`${newMode === 'pan' ? 'Pan' : 'Select'} mode`)
+              }}
+              className={cn("shadow-lg", interactionMode === 'select' && "bg-primary text-primary-foreground")}
+            >
+              {interactionMode === 'pan' ? <Hand size={18} weight="duotone" /> : <Selection size={18} weight="duotone" />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            Toggle mode <span className="text-muted-foreground ml-2">V</span>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="secondary"
+              onClick={() => {
+                setShowMinimap(prev => !prev)
+                toast.info(`Minimap ${!showMinimap ? 'enabled' : 'disabled'}`)
+              }}
               className={cn("shadow-lg", showMinimap && "bg-primary text-primary-foreground")}
             >
               <MapTrifold size={18} weight="duotone" />
@@ -455,7 +551,9 @@ export function ForgeCanvas({
         ref={canvasRef}
         className={cn(
           'flex-1 relative overflow-hidden',
-          isDraggingCanvas ? 'cursor-grabbing' : isSelecting ? 'cursor-crosshair' : 'cursor-grab'
+          isDraggingCanvas ? 'cursor-grabbing' : 
+          isSelecting ? 'cursor-crosshair' : 
+          interactionMode === 'select' ? 'cursor-crosshair' : 'cursor-grab'
         )}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
@@ -463,14 +561,15 @@ export function ForgeCanvas({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        <div
+        <motion.div
           className="canvas-background absolute inset-0"
           style={{
             backgroundImage: `
               radial-gradient(circle, oklch(0.25 0.05 270 / 0.3) 1px, transparent 1px)
             `,
             backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
-            backgroundPosition: `${pan.x}px ${pan.y}px`,
+            x: panX,
+            y: panY,
           }}
         />
 
@@ -492,10 +591,13 @@ export function ForgeCanvas({
 
             if (!sourceNode || !targetNode) return null
 
-            const x1 = (sourceNode.position.x + sourceNode.size.width / 2) * zoom + pan.x
-            const y1 = (sourceNode.position.y + sourceNode.size.height / 2) * zoom + pan.y
-            const x2 = (targetNode.position.x + targetNode.size.width / 2) * zoom + pan.x
-            const y2 = (targetNode.position.y + targetNode.size.height / 2) * zoom + pan.y
+            const currentPanX = panX.get()
+            const currentPanY = panY.get()
+
+            const x1 = (sourceNode.position.x + sourceNode.size.width / 2) * zoom + currentPanX
+            const y1 = (sourceNode.position.y + sourceNode.size.height / 2) * zoom + currentPanY
+            const x2 = (targetNode.position.x + targetNode.size.width / 2) * zoom + currentPanX
+            const y2 = (targetNode.position.y + targetNode.size.height / 2) * zoom + currentPanY
 
             const midX = (x1 + x2) / 2
             const midY = (y1 + y2) / 2
@@ -543,10 +645,12 @@ export function ForgeCanvas({
           />
         )}
 
-        <div
+        <motion.div
           className="absolute"
           style={{
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            x: panX,
+            y: panY,
+            scale: zoom,
             transformOrigin: '0 0',
             zIndex: 2,
           }}
@@ -564,7 +668,7 @@ export function ForgeCanvas({
               />
             ))}
           </AnimatePresence>
-        </div>
+        </motion.div>
 
         {nodes.length === 0 && (
           <motion.div 
@@ -582,7 +686,7 @@ export function ForgeCanvas({
                 Scroll to pan • ⌘+Scroll to zoom • ⌘+0 to fit all
               </p>
               <p className="text-muted-foreground text-xs mt-1">
-                Shift+Drag to lasso select • ⌘M for minimap
+                V to toggle select mode • ⌘M for minimap • Space to pan
               </p>
             </div>
           </motion.div>
