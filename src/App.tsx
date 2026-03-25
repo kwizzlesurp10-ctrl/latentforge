@@ -1,14 +1,15 @@
 import { useKV } from '@github/spark/hooks'
 import { useState, useCallback, useEffect } from 'react'
-import { VaultItem, CanvasNode, Connection } from '@/lib/types'
+import { VaultItem, CanvasNode, Connection, UserSettings } from '@/lib/types'
 import { VaultSidebar } from '@/components/vault/VaultSidebar'
 import { ForgeCanvas } from '@/components/canvas/ForgeCanvas'
 import { QuickCapture } from '@/components/vault/QuickCapture'
 import { CommandPalette } from '@/components/CommandPalette'
 import { AIPreviewPanel } from '@/components/AIPreviewPanel'
 import { PWAInstallBanner } from '@/components/PWAInstallBanner'
+import { SettingsDialog } from '@/components/SettingsDialog'
 import { Toaster } from '@/components/ui/sonner'
-import { Archive, Sparkle, GitBranch } from '@phosphor-icons/react'
+import { Archive, Sparkle, GitBranch, Gear } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -18,11 +19,25 @@ function App() {
   const [vaultItems, setVaultItems] = useKV<VaultItem[]>('vault-items', [])
   const [canvasNodes, setCanvasNodes] = useKV<CanvasNode[]>('canvas-nodes', [])
   const [connections, setConnections] = useKV<Connection[]>('canvas-connections', [])
+  const [settings, setSettings] = useKV<UserSettings>('user-settings', {
+    canvas: {
+      zoomSpeed: 1,
+      panSensitivity: 1,
+    },
+    ui: {
+      showMinimap: false,
+      showGrid: true,
+    },
+    keyboard: {
+      enableShortcuts: true,
+    },
+  })
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isCommandOpen, setIsCommandOpen] = useState(false)
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false)
   const [isAIPreviewOpen, setIsAIPreviewOpen] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [vaultTypeFilter, setVaultTypeFilter] = useState<VaultItem['type'] | null>(null)
   
   const [selectedVaultItemId, setSelectedVaultItemId] = useState<string | null>(null)
@@ -124,6 +139,10 @@ function App() {
     setIsAIPreviewOpen(true)
   }, [])
 
+  const handleUpdateSettings = useCallback((newSettings: UserSettings) => {
+    setSettings(newSettings)
+  }, [setSettings])
+
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
@@ -160,6 +179,11 @@ function App() {
           toast.info(`AI Preview ${newState ? 'opened' : 'closed'}`, { duration: 1500 })
           return newState
         })
+      }
+      
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault()
+        setIsSettingsOpen(true)
       }
       
       if (e.key === 'Escape') {
@@ -270,6 +294,22 @@ function App() {
               </TooltipContent>
             </Tooltip>
 
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="glow-hover transition-all duration-200"
+                >
+                  <Gear size={20} weight="duotone" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Settings <span className="text-muted-foreground ml-2">⌘,</span></p>
+              </TooltipContent>
+            </Tooltip>
+
             <Button
               onClick={() => setIsQuickCaptureOpen(true)}
               className="glow-primary ml-2 transition-all duration-200 hover:scale-105"
@@ -315,6 +355,8 @@ function App() {
             onAddConnection={addConnection}
             selectedNodeId={selectedCanvasNodeId}
             onSelectNode={handleSelectCanvasNode}
+            zoomSpeed={settings?.canvas.zoomSpeed || 1}
+            showGrid={settings?.ui.showGrid ?? true}
           />
 
           <AnimatePresence mode="wait">
@@ -359,6 +401,17 @@ function App() {
 
         <Toaster position="bottom-right" theme="dark" />
         <PWAInstallBanner />
+        
+        <SettingsDialog
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          settings={settings || {
+            canvas: { zoomSpeed: 1, panSensitivity: 1 },
+            ui: { showMinimap: false, showGrid: true },
+            keyboard: { enableShortcuts: true },
+          }}
+          onUpdateSettings={handleUpdateSettings}
+        />
       </div>
     </TooltipProvider>
   )

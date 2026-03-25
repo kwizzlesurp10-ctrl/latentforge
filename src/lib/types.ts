@@ -71,3 +71,17 @@ export interface ExportFormat {
   content: string
   metadata?: Record<string, any>
 }
+
+export interface UserSettings {
+  canvas: {
+    zoomSpeed: number
+    panSensitivity: number
+  }
+  ui: {
+    showMinimap: boolean
+    showGrid: boolean
+  }
+  keyboard: {
+    enableShortcuts: boolean
+  }
+}

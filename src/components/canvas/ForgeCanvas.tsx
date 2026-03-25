@@ -17,6 +17,8 @@ interface ForgeCanvasProps {
   onAddConnection: (source: string, target: string) => void
   selectedNodeId?: string | null
   onSelectNode: (id: string | null) => void
+  zoomSpeed?: number
+  showGrid?: boolean
 }
 
 export function ForgeCanvas({
@@ -27,6 +29,8 @@ export function ForgeCanvas({
   onDeleteNode,
   selectedNodeId,
   onSelectNode,
+  zoomSpeed = 1,
+  showGrid = true,
 }: ForgeCanvasProps) {
   const panX = useMotionValue(0)
   const panY = useMotionValue(0)
@@ -55,7 +59,7 @@ export function ForgeCanvas({
     const mouseX = e.clientX - rect.left
     const mouseY = e.clientY - rect.top
     
-    const delta = e.deltaY * -0.003
+    const delta = e.deltaY * -0.003 * zoomSpeed
     const newZoom = Math.min(Math.max(zoom + delta, 0.1), 3)
     
     const zoomFactor = newZoom / zoom
@@ -67,7 +71,7 @@ export function ForgeCanvas({
     panY.set(mouseY - (mouseY - currentPanY) * zoomFactor)
     
     setZoom(newZoom)
-  }, [panX, panY, zoom])
+  }, [panX, panY, zoom, zoomSpeed])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement
@@ -557,9 +561,9 @@ export function ForgeCanvas({
         <motion.div
           className="canvas-background absolute inset-0"
           style={{
-            backgroundImage: `
+            backgroundImage: showGrid ? `
               radial-gradient(circle, oklch(0.25 0.05 270 / 0.3) 1px, transparent 1px)
-            `,
+            ` : 'none',
             backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
             x: panX,
             y: panY,
