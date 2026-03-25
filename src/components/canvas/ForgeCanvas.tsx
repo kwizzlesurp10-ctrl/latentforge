@@ -47,33 +47,26 @@ export function ForgeCanvas({
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     
-    if (e.ctrlKey || e.metaKey) {
-      const rect = canvasRef.current?.getBoundingClientRect()
-      if (!rect) return
-      
-      const mouseX = e.clientX - rect.left
-      const mouseY = e.clientY - rect.top
-      
-      const delta = e.deltaY * -0.003
-      const newZoom = Math.min(Math.max(zoom + delta, 0.1), 3)
-      
-      const zoomFactor = newZoom / zoom
-      
-      const currentPanX = panX.get()
-      const currentPanY = panY.get()
-      
-      panX.set(mouseX - (mouseX - currentPanX) * zoomFactor)
-      panY.set(mouseY - (mouseY - currentPanY) * zoomFactor)
-      
-      setZoom(newZoom)
-    } else {
-      const currentPanX = panX.get()
-      const currentPanY = panY.get()
-      
-      panX.set(currentPanX - e.deltaX * 0.5)
-      panY.set(currentPanY - e.deltaY * 0.5)
-    }
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    
+    const delta = e.deltaY * -0.003
+    const newZoom = Math.min(Math.max(zoom + delta, 0.1), 3)
+    
+    const zoomFactor = newZoom / zoom
+    
+    const currentPanX = panX.get()
+    const currentPanY = panY.get()
+    
+    panX.set(mouseX - (mouseX - currentPanX) * zoomFactor)
+    panY.set(mouseY - (mouseY - currentPanY) * zoomFactor)
+    
+    setZoom(newZoom)
   }, [panX, panY, zoom])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
