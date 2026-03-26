@@ -14,10 +14,11 @@ interface ForgeCanvasProps {
   connections: Connection[]
   onAddNode: (node: Omit<CanvasNode, 'id'>) => CanvasNode
   onUpdateNode: (id: string, updates: Partial<CanvasNode>) => void
+  onUpdateNodes: (updates: Record<string, Partial<CanvasNode>>) => void
   onDeleteNode: (id: string) => void
   onAddConnection: (source: string, target: string) => void
-  selectedNodeId?: string | null
-  onSelectNode: (id: string | null) => void
+  selectedNodeIds: string[]
+  onSelectNodes: (ids: string[]) => void
   zoomSpeed?: number
   showGrid?: boolean
 }
@@ -27,9 +28,11 @@ export function ForgeCanvas({
   connections,
   onAddNode,
   onUpdateNode,
+  onUpdateNodes,
   onDeleteNode,
-  selectedNodeId,
-  onSelectNode,
+  onAddConnection,
+  selectedNodeIds,
+  onSelectNodes,
   zoomSpeed = 1,
   showGrid = true,
 }: ForgeCanvasProps) {
@@ -41,7 +44,6 @@ export function ForgeCanvas({
   const [isSelecting, setIsSelecting] = useState(false)
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 })
   const [selectionEnd, setSelectionEnd] = useState({ x: 0, y: 0 })
-  const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set())
   const [showMinimap, setShowMinimap] = useState(false)
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false)
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>('pan')
@@ -97,11 +99,10 @@ export function ForgeCanvas({
         setIsDraggingCanvas(true)
         setIsPanning(true)
         setPanStart({ x: e.clientX - panX.get(), y: e.clientY - panY.get() })
-        onSelectNode(null)
-        setSelectedNodes(new Set())
+        onSelectNodes([])
       }
     }
-  }, [panX, panY, interactionMode, onSelectNode])
+  }, [panX, panY, interactionMode, onSelectNodes])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isPanning && isDraggingCanvas) {
@@ -155,7 +156,7 @@ export function ForgeCanvas({
           }
         })
         
-        setSelectedNodes(selected)
+        onSelectNodes(Array.from(selected))
         if (selected.size > 0) {
           toast.success(`Selected ${selected.size} node${selected.size > 1 ? 's' : ''}`)
         }
@@ -170,7 +171,7 @@ export function ForgeCanvas({
     
     setIsPanning(false)
     setIsDraggingCanvas(false)
-  }, [isSelecting, selectionStart, selectionEnd, nodes, zoom, panX, panY, connectingFrom])
+  }, [isSelecting, selectionStart, selectionEnd, nodes, zoom, panX, panY, connectingFrom, onSelectNodes])
 
   const addNode = useCallback((type: CanvasNode['type']) => {
     const canvasRect = canvasRef.current?.getBoundingClientRect()
@@ -191,9 +192,9 @@ export function ForgeCanvas({
       connections: [],
     })
 
-    onSelectNode(newNode.id)
+    onSelectNodes([newNode.id])
     toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} node added`)
-  }, [onAddNode, onSelectNode, panX, panY, zoom])
+  }, [onAddNode, onSelectNodes, panX, panY, zoom])
 
   const centerCanvas = useCallback(() => {
     if (nodes.length === 0) {
@@ -243,8 +244,46 @@ export function ForgeCanvas({
     panX.set(rect.width / 2 - nodeCenterX * zoom)
     panY.set(rect.height / 2 - nodeCenterY * zoom)
     
-    onSelectNode(nodeId)
-  }, [nodes, zoom, panX, panY, onSelectNode])
+    onSelectNodes([nodeId])
+  }, [nodes, zoom, panX, panY, onSelectNodes])
+
+  const applyAutoLayout = useCallback(() => {
+    if (nodes.length === 0) return
+
+    const simulationNodes = nodes.map(node => ({
+      id: node.id,
+      x: node.position.x,
+      y: node.position.y,
+      width: node.size.width,
+      height: node.size.height
+    }))
+
+    const simulationLinks = connections.map(conn => ({
+      source: conn.source,
+      target: conn.target
+    }))
+
+    const simulation = d3.forceSimulation(simulationNodes as any)
+      .force("link", d3.forceLink(simulationLinks).id((d: any) => d.id).distance(200))
+      .force("charge", d3.forceManyBody().strength(-1000))
+      .force("center", d3.forceCenter(0, 0))
+      .force("collision", d3.forceCollide().radius(200))
+      .stop()
+
+    // Run simulation for a fixed number of ticks
+    for (let i = 0; i < 300; ++i) simulation.tick()
+
+    const updates: Record<string, Partial<CanvasNode>> = {}
+    simulationNodes.forEach((n: any) => {
+      updates[n.id] = {
+        position: { x: n.x, y: n.y }
+      }
+    })
+
+    onUpdateNodes(updates)
+    centerCanvas()
+    toast.success('Auto-layout applied')
+  }, [nodes, connections, onUpdateNodes, centerCanvas])
 
   const handleStartConnection = useCallback((nodeId: string, startPos: { x: number, y: number }) => {
     setConnectingFrom(nodeId)
