@@ -8,8 +8,10 @@ import { CommandPalette } from '@/components/CommandPalette'
 import { AIPreviewPanel } from '@/components/AIPreviewPanel'
 import { PWAInstallBanner } from '@/components/PWAInstallBanner'
 import { SettingsDialog } from '@/components/SettingsDialog'
+import { TimelineView } from '@/components/TimelineView'
+import { AgentSwarm } from '@/components/AgentSwarm'
 import { Toaster } from '@/components/ui/sonner'
-import { Archive, Sparkle, GitBranch, Gear } from '@phosphor-icons/react'
+import { Archive, Sparkle, GitBranch, Gear, Lightning } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -19,6 +21,8 @@ function App() {
   const [vaultItems, setVaultItems] = useKV<VaultItem[]>('vault-items', [])
   const [canvasNodes, setCanvasNodes] = useKV<CanvasNode[]>('canvas-nodes', [])
   const [connections, setConnections] = useKV<Connection[]>('canvas-connections', [])
+  const [timelineNodes, setTimelineNodes] = useKV<TimelineNode[]>('timeline-nodes', [])
+  const [agents, setAgents] = useKV<Agent[]>('agents', [])
   const [settings, setSettings] = useKV<UserSettings>('user-settings', {
     canvas: {
       zoomSpeed: 1,
@@ -38,21 +42,23 @@ function App() {
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false)
   const [isAIPreviewOpen, setIsAIPreviewOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isTimelineOpen, setIsTimelineOpen] = useState(false)
+  const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false)
   const [vaultTypeFilter, setVaultTypeFilter] = useState<VaultItem['type'] | null>(null)
   
   const [selectedVaultItemId, setSelectedVaultItemId] = useState<string | null>(null)
-  const [selectedCanvasNodeId, setSelectedCanvasNodeId] = useState<string | null>(null)
+  const [selectedCanvasNodeIds, setSelectedCanvasNodeIds] = useState<string[]>([])
 
   const handleSelectVaultItem = useCallback((id: string) => {
     setSelectedVaultItemId(id)
-    setSelectedCanvasNodeId(null)
+    setSelectedCanvasNodeIds([])
     setIsAIPreviewOpen(true)
   }, [])
 
-  const handleSelectCanvasNode = useCallback((id: string | null) => {
-    setSelectedCanvasNodeId(id)
+  const handleSelectCanvasNodes = useCallback((ids: string[]) => {
+    setSelectedCanvasNodeIds(ids)
     setSelectedVaultItemId(null)
-    if (id) {
+    if (ids.length > 0) {
       setIsAIPreviewOpen(true)
     }
   }, [])
@@ -61,11 +67,11 @@ function App() {
     ? vaultItems?.find(item => item.id === selectedVaultItemId)
     : null
 
-  const selectedCanvasNode = selectedCanvasNodeId 
-    ? canvasNodes?.find(node => node.id === selectedCanvasNodeId)
-    : null
+  const selectedCanvasNodes = selectedCanvasNodeIds.length > 0
+    ? canvasNodes?.filter(node => selectedCanvasNodeIds.includes(node.id))
+    : []
 
-  const addVaultItem = useCallback((item: Omit<VaultItem, 'id' | 'createdAt' | 'updatedAt' | 'version'>) => {
+  const addVaultItem = useCallback(async (item: Omit<VaultItem, 'id' | 'createdAt' | 'updatedAt' | 'version'>) => {
     const newItem: VaultItem = {
       ...item,
       id: `vault-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -74,9 +80,40 @@ function App() {
       version: 1,
     }
     
-    setVaultItems((current) => [newItem, ...(current || [])])
+    setVaultItems((current) => {
+      const next = [newItem, ...(current || [])]
+      addTimelineSnapshot('vault-item', `Added vault item: ${newItem.content.slice(0, 30)}...`, {
+        vaultItems: next,
+        canvasNodes: canvasNodes || [],
+        connections: connections || [],
+      })
+      return next
+    })
+
+    // Semantic Auto-Tagging
+    try {
+      const prompt = spark.llmPrompt`Analyze this content and provide 3-5 relevant semantic tags. 
+Content: ${newItem.content}
+Return only the tags separated by commas, no preamble.`
+      
+      const response = await spark.llm(prompt, 'gpt-4o-mini', false)
+      const newTags = response.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag.length > 0)
+      
+      if (newTags.length > 0) {
+        setVaultItems((current) => 
+          (current || []).map(item => 
+            item.id === newItem.id 
+              ? { ...item, tags: Array.from(new Set([...item.tags, ...newTags])) }
+              : item
+          )
+        )
+      }
+    } catch (error) {
+      console.error('Auto-tagging error:', error)
+    }
+
     return newItem
-  }, [setVaultItems])
+  }, [setVaultItems, addTimelineSnapshot, canvasNodes, connections])
 
   const updateVaultItem = useCallback((id: string, updates: Partial<VaultItem>) => {
     setVaultItems((current) =>
@@ -98,9 +135,17 @@ function App() {
       id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     }
     
-    setCanvasNodes((current) => [...(current || []), newNode])
+    setCanvasNodes((current) => {
+      const next = [...(current || []), newNode]
+      addTimelineSnapshot('canvas-change', `Added ${newNode.type} node`, {
+        vaultItems: vaultItems || [],
+        canvasNodes: next,
+        connections: connections || [],
+      })
+      return next
+    })
     return newNode
-  }, [setCanvasNodes])
+  }, [setCanvasNodes, addTimelineSnapshot, vaultItems, connections])
 
   const updateCanvasNode = useCallback((id: string, updates: Partial<CanvasNode>) => {
     setCanvasNodes((current) =>
@@ -124,6 +169,74 @@ function App() {
     
     setConnections((current) => [...(current || []), newConnection])
   }, [setConnections])
+
+  const addTimelineSnapshot = useCallback((type: TimelineNode['type'], description: string, snapshot: any) => {
+    const newNode: TimelineNode = {
+      id: `time-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now(),
+      type,
+      description,
+      snapshot,
+      parentIds: timelineNodes?.length ? [timelineNodes[0].id] : [],
+    }
+    setTimelineNodes((current) => [newNode, ...(current || [])])
+  }, [timelineNodes, setTimelineNodes])
+
+  const resurrectSnapshot = useCallback((snapshot: any) => {
+    setVaultItems(snapshot.vaultItems || [])
+    setCanvasNodes(snapshot.canvasNodes || [])
+    setConnections(snapshot.connections || [])
+    toast.success('Snapshot resurrected')
+    setIsTimelineOpen(false)
+  }, [setVaultItems, setCanvasNodes, setConnections])
+
+  const spawnAgent = useCallback(async (type: Agent['type'], input: string) => {
+    const newAgent: Agent = {
+      id: `agent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      status: 'processing',
+      input,
+      outputs: [],
+      createdAt: Date.now(),
+    }
+    
+    setAgents((current) => [newAgent, ...(current || [])])
+    
+    try {
+      const prompt = spark.llmPrompt`You are a specialized AI agent: ${type}. 
+Input: ${input}
+Provide 3 divergent and creative explorations or solutions based on this input. 
+Format each one clearly using Markdown.`
+
+      const response = await spark.llm(prompt, 'gpt-4o-mini', false)
+      
+      const outputs: AgentOutput[] = [
+        {
+          id: `out-${Date.now()}-1`,
+          content: response,
+          timestamp: Date.now(),
+        }
+      ]
+      
+      setAgents((current) => 
+        (current || []).map(a => a.id === newAgent.id ? { ...a, status: 'complete', outputs } : a)
+      )
+      
+      addTimelineSnapshot('agent-spawn', `Agent ${type} completed exploration`, {
+        vaultItems: vaultItems || [],
+        canvasNodes: canvasNodes || [],
+        connections: connections || [],
+      })
+      
+      toast.success(`Agent ${type} completed task`)
+    } catch (error) {
+      console.error('Agent error:', error)
+      setAgents((current) => 
+        (current || []).map(a => a.id === newAgent.id ? { ...a, status: 'error' } : a)
+      )
+      toast.error(`Agent ${type} failed`)
+    }
+  }, [setAgents, addTimelineSnapshot, vaultItems, canvasNodes, connections])
 
   const handleViewAllItems = useCallback(() => {
     setIsSidebarOpen(true)
@@ -160,7 +273,12 @@ function App() {
       
       if ((e.metaKey || e.ctrlKey) && e.key === 't') {
         e.preventDefault()
-        toast.info('Timeline coming soon!', { duration: 2000 })
+        setIsTimelineOpen(prev => !prev)
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'a') {
+        e.preventDefault()
+        setIsAgentPanelOpen(prev => !prev)
       }
       
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
@@ -194,10 +312,10 @@ function App() {
         } else if (isAIPreviewOpen) {
           setIsAIPreviewOpen(false)
           setSelectedVaultItemId(null)
-          setSelectedCanvasNodeId(null)
-        } else if (selectedCanvasNodeId || selectedVaultItemId) {
+          setSelectedCanvasNodeIds([])
+        } else if (selectedCanvasNodeIds.length > 0 || selectedVaultItemId) {
           setSelectedVaultItemId(null)
-          setSelectedCanvasNodeId(null)
+          setSelectedCanvasNodeIds([])
         }
       }
       
@@ -267,6 +385,22 @@ function App() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  onClick={() => setIsAgentPanelOpen(true)}
+                  className="glow-hover transition-all duration-200"
+                >
+                  <Lightning size={20} weight="duotone" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Agent Swarm <span className="text-muted-foreground ml-2">⌘⇧A</span></p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => setIsCommandOpen(true)}
                   className="glow-hover transition-all duration-200"
                 >
@@ -283,7 +417,7 @@ function App() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => toast.info('Timeline coming soon!', { duration: 2000 })}
+                  onClick={() => setIsTimelineOpen(true)}
                   className="glow-hover transition-all duration-200"
                 >
                   <GitBranch size={20} weight="duotone" />
@@ -353,14 +487,14 @@ function App() {
             onUpdateNode={updateCanvasNode}
             onDeleteNode={deleteCanvasNode}
             onAddConnection={addConnection}
-            selectedNodeId={selectedCanvasNodeId}
-            onSelectNode={handleSelectCanvasNode}
+            selectedNodeIds={selectedCanvasNodeIds}
+            onSelectNodes={handleSelectCanvasNodes}
             zoomSpeed={settings?.canvas.zoomSpeed || 1}
             showGrid={settings?.ui.showGrid ?? true}
           />
 
           <AnimatePresence mode="wait">
-            {isAIPreviewOpen && (selectedVaultItem || selectedCanvasNode) && (
+            {isAIPreviewOpen && (selectedVaultItem || selectedCanvasNodes.length > 0) && (
               <motion.div
                 initial={{ x: 400, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
@@ -369,11 +503,11 @@ function App() {
               >
                 <AIPreviewPanel
                   selectedItem={selectedVaultItem}
-                  selectedNode={selectedCanvasNode}
+                  selectedNodes={selectedCanvasNodes}
                   onClose={() => {
                     setIsAIPreviewOpen(false)
                     setSelectedVaultItemId(null)
-                    setSelectedCanvasNodeId(null)
+                    setSelectedCanvasNodeIds([])
                   }}
                 />
               </motion.div>
@@ -401,6 +535,21 @@ function App() {
 
         <Toaster position="bottom-right" theme="dark" />
         <PWAInstallBanner />
+        
+        <TimelineView 
+          isOpen={isTimelineOpen}
+          onClose={() => setIsTimelineOpen(false)}
+          nodes={timelineNodes || []}
+          onResurrect={resurrectSnapshot}
+        />
+        
+        <AgentSwarm
+          isOpen={isAgentPanelOpen}
+          onClose={() => setIsAgentPanelOpen(false)}
+          agents={agents || []}
+          onSpawn={spawnAgent}
+          selectedContent={selectedVaultItem?.content || selectedCanvasNodes.map(n => n.content).join('\n---\n') || undefined}
+        />
         
         <SettingsDialog
           isOpen={isSettingsOpen}

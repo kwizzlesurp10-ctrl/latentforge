@@ -13,6 +13,9 @@ interface CanvasNodeComponentProps {
   onSelect: () => void
   onUpdate: (updates: Partial<CanvasNode>) => void
   onDelete: () => void
+  onStartConnection: (pos: { x: number, y: number }) => void
+  onEndConnection: () => void
+  isConnecting: boolean
   zoom: number
 }
 
@@ -22,6 +25,9 @@ export function CanvasNodeComponent({
   onSelect,
   onUpdate,
   onDelete,
+  onStartConnection,
+  onEndConnection,
+  isConnecting,
   zoom,
 }: CanvasNodeComponentProps) {
   const [isDragging, setIsDragging] = useState(false)
@@ -33,6 +39,7 @@ export function CanvasNodeComponent({
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).tagName === 'TEXTAREA') return
     if ((e.target as HTMLElement).closest('.resize-handle')) return
+    if ((e.target as HTMLElement).closest('.connect-handle')) return
     
     e.stopPropagation()
     onSelect()
@@ -54,6 +61,23 @@ export function CanvasNodeComponent({
       x: e.clientX * scale,
       y: e.clientY * scale,
     })
+  }
+
+  const handleConnectStart = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const rect = nodeRef.current?.parentElement?.getBoundingClientRect()
+    if (rect) {
+      onStartConnection({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      })
+    }
+  }
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (isConnecting) {
+      onEndConnection()
+    }
   }
 
   useEffect(() => {
@@ -115,13 +139,15 @@ export function CanvasNodeComponent({
       }}
       exit={{ opacity: 0, scale: 0.8 }}
       transition={{ duration: 0.2 }}
+      onMouseUp={handleMouseUp}
     >
       <Card
         className={cn(
           'p-4 cursor-move transition-all border-2 group hover:shadow-lg relative',
           isSelected ? 'border-primary glow-primary' : 'border-border',
           isDragging && 'opacity-80 shadow-2xl scale-105',
-          isResizing && 'opacity-90'
+          isResizing && 'opacity-90',
+          isConnecting && 'hover:border-primary/50'
         )}
         onMouseDown={handleMouseDown}
       >
@@ -163,19 +189,32 @@ export function CanvasNodeComponent({
         />
 
         {isSelected && (
-          <motion.div
-            className="resize-handle absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity"
-            onMouseDown={handleResizeStart}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.1 }}
-          >
-            <ArrowsOutSimple 
-              size={16} 
-              weight="bold" 
-              className="absolute bottom-1 right-1 text-primary"
-            />
-          </motion.div>
+          <>
+            <motion.div
+              className="resize-handle absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity"
+              onMouseDown={handleResizeStart}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.1 }}
+            >
+              <ArrowsOutSimple 
+                size={16} 
+                weight="bold" 
+                className="absolute bottom-1 right-1 text-primary"
+              />
+            </motion.div>
+
+            <motion.div
+              className="connect-handle absolute top-1/2 -right-3 w-6 h-6 bg-card border-2 border-primary rounded-full cursor-crosshair flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+              style={{ translateY: '-50%' }}
+              onMouseDown={handleConnectStart}
+              initial={{ opacity: 0, x: -5 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+            </motion.div>
+          </>
         )}
       </Card>
     </motion.div>

@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { VaultItem } from '@/lib/types'
-import { Lightning, X } from '@phosphor-icons/react'
+import { Lightning, X, Microphone, MicrophoneSlash } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
 interface QuickCaptureProps {
@@ -19,14 +19,72 @@ export function QuickCapture({ isOpen, onClose, onSave }: QuickCaptureProps) {
   const [content, setContent] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [newTag, setNewTag] = useState('')
+  const [isListening, setIsListening] = useState(false)
+  const recognitionRef = useRef<any>(null)
 
   useEffect(() => {
     if (!isOpen) {
       setContent('')
       setTags([])
       setNewTag('')
+      stopListening()
     }
   }, [isOpen])
+
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+    }
+  }, [])
+
+  const toggleListening = useCallback(() => {
+    if (isListening) {
+      stopListening()
+      return
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      toast.error('Speech recognition not supported in this browser')
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
+
+    recognition.onstart = () => {
+      setIsListening(true)
+      toast.info('Listening...')
+    }
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error)
+      setIsListening(false)
+      toast.error(`Speech recognition error: ${event.error}`)
+    }
+
+    recognition.onend = () => {
+      setIsListening(false)
+    }
+
+    recognition.onresult = (event: any) => {
+      let transcript = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          transcript += event.results[i][0].transcript
+        }
+      }
+      if (transcript) {
+        setContent(prev => prev + (prev.length > 0 ? ' ' : '') + transcript)
+      }
+    }
+
+    recognitionRef.current = recognition
+    recognition.start()
+  }, [isListening, stopListening])
 
   const detectType = (text: string): VaultItem['type'] => {
     if (text.match(/```|function |const |let |var |import |export /)) {
@@ -90,14 +148,45 @@ export function QuickCapture({ isOpen, onClose, onSave }: QuickCaptureProps) {
         </DialogHeader>
 
         <div className="space-y-4">
-          <Textarea
-            placeholder="Capture your thought, paste code, drop a prompt..."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="min-h-[200px] font-mono text-sm resize-none border-primary/30 focus:border-primary"
-            autoFocus
-          />
+          <div className="relative">
+            <Textarea
+              placeholder="Capture your thought, paste code, drop a prompt..."
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="min-h-[200px] font-mono text-sm resize-none border-primary/30 focus:border-primary pr-12"
+              autoFocus
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={toggleListening}
+              className={cn(
+                "absolute top-2 right-2 transition-all duration-300",
+                isListening ? "text-primary animate-pulse" : "text-muted-foreground hover:text-primary"
+              )}
+              title={isListening ? "Stop listening" : "Start voice capture"}
+            >
+              {isListening ? (
+                <Microphone size={20} weight="fill" />
+              ) : (
+                <Microphone size={20} weight="duotone" />
+              )}
+            </Button>
+            {isListening && (
+              <div className="absolute bottom-2 right-2 pointer-events-none">
+                <div className="flex gap-1 items-end h-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div 
+                      key={i} 
+                      className="w-1 bg-primary rounded-full animate-bounce" 
+                      style={{ height: `${Math.random() * 100}%`, animationDelay: `${i * 0.1}s` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div>
             <div className="flex items-center gap-2 mb-2">

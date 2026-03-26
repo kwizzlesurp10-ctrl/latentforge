@@ -11,11 +11,15 @@ import {
   Lightning, 
   Trash,
   Tag,
-  Clock
+  Clock,
+  MagnifyingGlass,
+  XCircle
 } from '@phosphor-icons/react'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { Markdown } from '@/components/Markdown'
+import { Input } from '@/components/ui/input'
 
 interface VaultSidebarProps {
   items: VaultItem[]
@@ -33,17 +37,31 @@ interface VaultSidebarProps {
 export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSelectItem, typeFilter, onClearTypeFilter }: VaultSidebarProps) {
   const [activeTab, setActiveTab] = useState('all')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
 
   const allTags = Array.from(new Set(items.flatMap((item) => item.tags)))
 
-  const filteredItems = items.filter((item) => {
-    if (typeFilter && item.type !== typeFilter) return false
-    if (activeTab === 'all') return true
-    if (activeTab === 'tags' && selectedTags.length > 0) {
-      return selectedTags.some((tag) => item.tags.includes(tag))
-    }
-    return true
-  })
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      // 1. Type Filter (from header)
+      if (typeFilter && item.type !== typeFilter) return false
+      
+      // 2. Search Query
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        const contentMatch = item.content.toLowerCase().includes(query)
+        const tagMatch = item.tags.some(tag => tag.toLowerCase().includes(query))
+        if (!contentMatch && !tagMatch) return false
+      }
+      
+      // 3. Tag Filter (AND logic)
+      if (selectedTags.length > 0) {
+        return selectedTags.every((tag) => item.tags.includes(tag))
+      }
+      
+      return true
+    })
+  }, [items, typeFilter, searchQuery, selectedTags])
 
   const getItemIcon = (type: VaultItem['type']) => {
     switch (type) {
@@ -89,10 +107,61 @@ export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSe
           )}
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <TabsList className="mx-4 mt-4">
-            <TabsTrigger value="all" className="flex-1">All</TabsTrigger>
-            <TabsTrigger value="tags" className="flex-1">Tags</TabsTrigger>
+        <div className="p-4 space-y-4">
+          <div className="relative group">
+            <MagnifyingGlass 
+              size={16} 
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" 
+            />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search ideas or tags..."
+              className="pl-10 bg-muted/30 border-border focus-visible:ring-primary h-9 text-xs"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <XCircle size={14} weight="fill" />
+              </button>
+            )}
+          </div>
+
+          {selectedTags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+              {selectedTags.map(tag => (
+                <Badge 
+                  key={tag} 
+                  variant="secondary" 
+                  className="bg-primary/20 border-primary/30 text-primary flex items-center gap-1 pr-1 pl-2 py-0.5"
+                >
+                  {tag}
+                  <button 
+                    onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                    className="hover:text-foreground p-0.5 rounded-full hover:bg-primary/20"
+                  >
+                    <XCircle size={12} weight="fill" />
+                  </button>
+                </Badge>
+              ))}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setSelectedTags([])}
+                className="h-6 text-[10px] text-muted-foreground hover:text-destructive"
+              >
+                Clear all
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+          <TabsList className="mx-4">
+            <TabsTrigger value="all" className="flex-1 text-xs h-8">Items</TabsTrigger>
+            <TabsTrigger value="tags" className="flex-1 text-xs h-8">Browse Tags</TabsTrigger>
           </TabsList>
 
           <TabsContent value="all" className="flex-1 mt-0 overflow-hidden">
@@ -101,7 +170,7 @@ export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSe
                 {filteredItems.length === 0 ? (
                   <div className="text-center py-12">
                     <p className="text-sm text-muted-foreground">
-                      No items yet. Press ⌘K to capture.
+                      {searchQuery || selectedTags.length > 0 ? 'No matching items found.' : 'No items yet. Press ⌘K to capture.'}
                     </p>
                   </div>
                 ) : (
@@ -138,9 +207,7 @@ export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSe
                         </Button>
                       </div>
 
-                      <p className="text-sm line-clamp-3 mb-3">
-                        {item.content}
-                      </p>
+                      <Markdown content={item.content} preview className="text-sm mb-3" />
 
                       {item.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1">
@@ -148,7 +215,18 @@ export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSe
                             <Badge
                               key={tag}
                               variant="secondary"
-                              className="text-xs px-2 py-0.5"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedTags(prev => 
+                                  prev.includes(tag) ? prev : [...prev, tag]
+                                )
+                              }}
+                              className={cn(
+                                "text-[10px] px-1.5 py-0 border border-transparent transition-colors",
+                                selectedTags.includes(tag) 
+                                  ? "bg-primary/20 border-primary/30 text-primary" 
+                                  : "bg-muted/50 hover:border-primary/30"
+                              )}
                             >
                               {tag}
                             </Badge>
@@ -172,40 +250,61 @@ export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSe
                     </p>
                   </div>
                 ) : (
-                  allTags.map((tag) => {
-                    const count = items.filter((item) => item.tags.includes(tag)).length
-                    const isSelected = selectedTags.includes(tag)
+                  allTags
+                    .sort((a, b) => a.localeCompare(b))
+                    .map((tag) => {
+                      const count = items.filter((item) => item.tags.includes(tag)).length
+                      const isSelected = selectedTags.includes(tag)
 
-                    return (
-                      <button
-                        key={tag}
-                        onClick={() => {
-                          setSelectedTags((prev) =>
+                      return (
+                        <button
+                          key={tag}
+                          onClick={() => {
+                            setSelectedTags((prev) =>
+                              isSelected
+                                ? prev.filter((t) => t !== tag)
+                                : [...prev, tag]
+                            )
+                          }}
+                          className={cn(
+                            'w-full flex items-center justify-between px-3 py-2 rounded-md border transition-all group/tag',
                             isSelected
-                              ? prev.filter((t) => t !== tag)
-                              : [...prev, tag]
-                          )
-                          setActiveTab('all')
-                        }}
-                        className={cn(
-                          'w-full flex items-center justify-between p-3 rounded-md border transition-all',
-                          isSelected
-                            ? 'border-primary bg-primary/10 glow-primary'
-                            : 'border-border hover:border-primary/50'
-                        )}
-                      >
-                        <span className="text-sm font-medium">{tag}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {count}
-                        </Badge>
-                      </button>
-                    )
-                  })
+                              ? 'border-primary bg-primary/10 glow-primary'
+                              : 'border-border hover:border-primary/50 bg-muted/10'
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Tag 
+                              size={14} 
+                              weight={isSelected ? "fill" : "duotone"} 
+                              className={isSelected ? "text-primary" : "text-muted-foreground group-hover/tag:text-primary"} 
+                            />
+                            <span className={cn(
+                              "text-sm font-medium transition-colors",
+                              isSelected ? "text-primary" : "group-hover/tag:text-primary"
+                            )}>
+                              {tag}
+                            </span>
+                          </div>
+                          <Badge variant="outline" className={cn(
+                            "text-[10px] h-5 transition-colors",
+                            isSelected ? "border-primary/50 bg-primary/20 text-primary" : ""
+                          )}>
+                            {count}
+                          </Badge>
+                        </button>
+                      )
+                    })
                 )}
               </div>
             </ScrollArea>
           </TabsContent>
         </Tabs>
+      </div>
+    </aside>
+  )
+}
+
       </div>
     </aside>
   )

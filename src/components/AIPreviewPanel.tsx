@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Markdown } from '@/components/Markdown'
 import { 
   Sparkle, 
   Code, 
@@ -18,25 +19,26 @@ import { toast } from 'sonner'
 
 interface AIPreviewPanelProps {
   selectedItem?: VaultItem | null
-  selectedNode?: CanvasNode | null
+  selectedNodes?: CanvasNode[]
   onClose: () => void
 }
 
-type PreviewMode = 'refine' | 'expand' | 'extract' | 'transform'
+type PreviewMode = 'refine' | 'expand' | 'extract' | 'transform' | 'synthesize'
 
 interface StreamingResult {
   content: string
   isComplete: boolean
 }
 
-export function AIPreviewPanel({ selectedItem, selectedNode, onClose }: AIPreviewPanelProps) {
+export function AIPreviewPanel({ selectedItem, selectedNodes = [], onClose }: AIPreviewPanelProps) {
   const [mode, setMode] = useState<PreviewMode>('refine')
   const [result, setResult] = useState<StreamingResult>({ content: '', isComplete: false })
   const [isGenerating, setIsGenerating] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const currentContent = selectedItem?.content || selectedNode?.content || ''
-  const currentType = selectedItem?.type || selectedNode?.type || 'text'
+  const isMultiSelect = selectedNodes.length > 1
+  const currentContent = selectedItem?.content || selectedNodes.map(n => n.content).join('\n---\n') || ''
+  const currentType = selectedItem?.type || (isMultiSelect ? 'multiple items' : selectedNodes[0]?.type) || 'text'
 
   const generatePreview = useCallback(async (selectedMode: PreviewMode) => {
     if (!currentContent.trim()) return
@@ -47,50 +49,55 @@ export function AIPreviewPanel({ selectedItem, selectedNode, onClose }: AIPrevie
     try {
       let prompt = ''
       
+      const contentContext = isMultiSelect 
+        ? `Here are ${selectedNodes.length} related items from my creative forge:\n\n${currentContent}`
+        : `Here is a ${currentType} from my creative forge:\n\n${currentContent}`
+
       switch (selectedMode) {
         case 'refine':
-          prompt = spark.llmPrompt`You are a creative assistant helping refine ideas. Take this ${currentType} content and improve it with better clarity, structure, and impact. Keep the same core idea but make it more compelling:
+          prompt = spark.llmPrompt`You are a creative assistant helping refine ideas. ${contentContext}
 
-Content: ${currentContent}
+Improve this content with better clarity, structure, and impact. ${isMultiSelect ? 'Synthesize them into a cohesive refined version.' : 'Keep the same core idea but make it more compelling.'}
 
 Provide the refined version directly without preamble or explanation.`
           break
         
         case 'expand':
-          prompt = spark.llmPrompt`You are a creative assistant helping expand ideas. Take this ${currentType} content and expand it with additional details, context, and depth. Add 2-3 related concepts or implementation ideas:
+          prompt = spark.llmPrompt`You are a creative assistant helping expand ideas. ${contentContext}
 
-Content: ${currentContent}
+Expand this with additional details, context, and depth. Add 2-3 related concepts or implementation ideas. ${isMultiSelect ? 'Connect the dots between these items.' : ''}
 
 Provide the expanded version directly.`
           break
         
         case 'extract':
-          prompt = spark.llmPrompt`You are an analytical assistant. Extract key insights, action items, and core concepts from this ${currentType} content. Format as a concise bulleted list:
+          prompt = spark.llmPrompt`You are an analytical assistant. ${contentContext}
 
-Content: ${currentContent}
+Extract key insights, action items, and core concepts. Format as a concise bulleted list.
 
 Provide bullet points only.`
           break
         
+        case 'synthesize':
         case 'transform':
-          if (currentType === 'code') {
+          if (isMultiSelect || selectedMode === 'synthesize') {
+            prompt = spark.llmPrompt`You are a creative alchemist. ${contentContext}
+
+Synthesize these different ideas into a single, unified concept or a structured framework. Find the hidden connections and emergent properties.
+
+Provide the synthesized framework directly.`
+          } else if (currentType === 'code') {
             prompt = spark.llmPrompt`Convert this code into well-documented pseudocode or a technical explanation:
 
 ${currentContent}
 
 Explain what it does and why.`
-          } else if (currentType === 'text' || currentType === 'prompt') {
+          } else {
             prompt = spark.llmPrompt`Transform this idea into a structured implementation plan with clear steps:
 
 ${currentContent}
 
 Create an actionable plan.`
-          } else {
-            prompt = spark.llmPrompt`Transform this content into a different format that makes it more useful:
-
-${currentContent}
-
-Provide the transformed version.`
           }
           break
       }
@@ -124,7 +131,7 @@ Provide the transformed version.`
     if (currentContent.trim()) {
       generatePreview(mode)
     }
-  }, [selectedItem?.id, selectedNode?.id, mode])
+  }, [selectedItem?.id, selectedNodes.map(n => n.id).join(','), mode])
 
   const handleCopy = async () => {
     if (result.content) {
@@ -143,18 +150,20 @@ Provide the transformed version.`
         return { label: 'Expand', icon: ListBullets, color: 'text-secondary' }
       case 'extract':
         return { label: 'Extract', icon: Code, color: 'text-accent' }
+      case 'synthesize':
+        return { label: 'Synthesize', icon: ArrowsClockwise, color: 'text-cyan-400' }
       case 'transform':
-        return { label: 'Transform', icon: ArrowsClockwise, color: 'text-cyan-400' }
+        return { label: 'Transform', icon: ArrowsClockwise, color: 'text-neural-indigo' }
     }
   }
 
-  if (!selectedItem && !selectedNode) {
+  if (!selectedItem && selectedNodes.length === 0) {
     return (
       <div className="w-96 border-l border-border bg-card flex items-center justify-center p-8">
         <div className="text-center">
           <Sparkle size={48} weight="duotone" className="text-muted-foreground opacity-30 mx-auto mb-4" />
           <p className="text-sm text-muted-foreground">
-            Select a vault item or canvas node to see AI-powered insights
+            Select a vault item or canvas nodes to see AI-powered insights
           </p>
         </div>
       </div>
@@ -180,8 +189,8 @@ Provide the transformed version.`
 
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2 mb-3">
-          <Badge variant="outline" className="text-xs">
-            {currentType}
+          <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+            {isMultiSelect ? `${selectedNodes.length} Nodes` : currentType}
           </Badge>
           {isGenerating && (
             <span className="text-xs text-muted-foreground animate-pulse">
@@ -191,25 +200,36 @@ Provide the transformed version.`
         </div>
         
         <ScrollArea className="h-24 rounded-md bg-muted/30 p-3">
-          <p className="text-xs text-muted-foreground line-clamp-4">
-            {currentContent}
-          </p>
+          <div className="text-[10px] text-muted-foreground line-clamp-4 space-y-1">
+            {isMultiSelect ? (
+              selectedNodes.map(n => (
+                <div key={n.id} className="border-l border-primary/30 pl-2">
+                  {n.content}
+                </div>
+              ))
+            ) : (
+              <p>{currentContent}</p>
+            )}
+          </div>
         </ScrollArea>
       </div>
 
       <Tabs value={mode} onValueChange={(v) => setMode(v as PreviewMode)} className="flex-1 flex flex-col">
         <TabsList className="mx-4 mt-4 grid grid-cols-4">
-          {(['refine', 'expand', 'extract', 'transform'] as PreviewMode[]).map((m) => {
-            const config = getModeConfig(m)
+          {(isMultiSelect 
+            ? ['refine', 'expand', 'extract', 'synthesize'] 
+            : ['refine', 'expand', 'extract', 'transform']
+          ).map((m) => {
+            const config = getModeConfig(m as PreviewMode)
             const Icon = config.icon
             return (
               <TabsTrigger 
                 key={m} 
                 value={m}
-                className="flex flex-col gap-1 py-2"
+                className="flex flex-col gap-1 py-2 h-auto"
               >
                 <Icon size={16} weight="duotone" className={config.color} />
-                <span className="text-xs">{config.label}</span>
+                <span className="text-[10px]">{config.label}</span>
               </TabsTrigger>
             )
           })}
@@ -226,11 +246,7 @@ Provide the transformed version.`
                     </div>
                   )}
                   
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
-                    <pre className="whitespace-pre-wrap text-sm leading-relaxed">
-                      {result.content}
-                    </pre>
-                  </div>
+                  <Markdown content={result.content} />
                   
                   {result.isComplete && (
                     <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border">

@@ -44,6 +44,8 @@ export function ForgeCanvas({
   const [showMinimap, setShowMinimap] = useState(false)
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false)
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>('pan')
+  const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
+  const [dragConnectionEnd, setDragConnectionEnd] = useState<{ x: number, y: number } | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const minimapRef = useRef<HTMLCanvasElement>(null)
   
@@ -112,8 +114,16 @@ export function ForgeCanvas({
           y: e.clientY - rect.top,
         })
       }
+    } else if (connectingFrom) {
+      const rect = canvasRef.current?.getBoundingClientRect()
+      if (rect) {
+        setDragConnectionEnd({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        })
+      }
     }
-  }, [isPanning, isDraggingCanvas, isSelecting, panStart, panX, panY])
+  }, [isPanning, isDraggingCanvas, isSelecting, connectingFrom, panStart, panX, panY])
 
   const handleMouseUp = useCallback(() => {
     if (isSelecting) {
@@ -152,9 +162,14 @@ export function ForgeCanvas({
       setIsSelecting(false)
     }
     
+    if (connectingFrom) {
+      setConnectingFrom(null)
+      setDragConnectionEnd(null)
+    }
+    
     setIsPanning(false)
     setIsDraggingCanvas(false)
-  }, [isSelecting, selectionStart, selectionEnd, nodes, zoom, panX, panY])
+  }, [isSelecting, selectionStart, selectionEnd, nodes, zoom, panX, panY, connectingFrom])
 
   const addNode = useCallback((type: CanvasNode['type']) => {
     const canvasRect = canvasRef.current?.getBoundingClientRect()
@@ -229,6 +244,28 @@ export function ForgeCanvas({
     
     onSelectNode(nodeId)
   }, [nodes, zoom, panX, panY, onSelectNode])
+
+  const handleStartConnection = useCallback((nodeId: string, startPos: { x: number, y: number }) => {
+    setConnectingFrom(nodeId)
+    setDragConnectionEnd(startPos)
+  }, [])
+
+  const handleEndConnection = useCallback((nodeId: string) => {
+    if (connectingFrom && connectingFrom !== nodeId) {
+      // Check if connection already exists
+      const exists = connections.some(c => 
+        (c.source === connectingFrom && c.target === nodeId) ||
+        (c.source === nodeId && c.target === connectingFrom)
+      )
+      
+      if (!exists) {
+        onAddConnection(connectingFrom, nodeId)
+        toast.success('Nodes connected')
+      }
+    }
+    setConnectingFrom(null)
+    setDragConnectionEnd(null)
+  }, [connectingFrom, connections, onAddConnection])
 
   const drawMinimap = useCallback(() => {
     const canvas = minimapRef.current
@@ -628,6 +665,29 @@ export function ForgeCanvas({
               </g>
             )
           })}
+
+          {connectingFrom && dragConnectionEnd && (() => {
+            const startNode = nodes.find(n => n.id === connectingFrom)
+            if (!startNode) return null
+            
+            const currentPanX = panX.get()
+            const currentPanY = panY.get()
+            
+            const x1 = (startNode.position.x + startNode.size.width / 2) * zoom + currentPanX
+            const y1 = (startNode.position.y + startNode.size.height / 2) * zoom + currentPanY
+            
+            return (
+              <line
+                x1={x1}
+                y1={y1}
+                x2={dragConnectionEnd.x}
+                y2={dragConnectionEnd.y}
+                stroke="oklch(0.65 0.28 330)"
+                strokeWidth={2}
+                strokeDasharray="5,5"
+              />
+            )
+          })()}
         </svg>
 
         {isSelecting && (
@@ -661,6 +721,9 @@ export function ForgeCanvas({
                 onSelect={() => onSelectNode(node.id)}
                 onUpdate={(updates) => onUpdateNode(node.id, updates)}
                 onDelete={() => onDeleteNode(node.id)}
+                onStartConnection={(pos) => handleStartConnection(node.id, pos)}
+                onEndConnection={() => handleEndConnection(node.id)}
+                isConnecting={!!connectingFrom}
                 zoom={zoom}
               />
             ))}
