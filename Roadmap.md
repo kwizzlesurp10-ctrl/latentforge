@@ -25,12 +25,12 @@ This roadmap outlines the path from the current production-ready foundation to t
 - [x] **Semantic Auto-Tagging**: Trigger AI calls automatically upon saving to suggest tags and perform semantic clustering in the vault.
 - [x] **Voice Capture**: Add a microphone button to `QuickCapture` using the Web Speech API for "thought-to-text" capture.
 
-## ⚡ Phase 3: UX Refinement & Polish
+## 🎨 Phase 3: UX Refinement & Polish
 *Focus: Performance, PWA features, and advanced canvas interactions.*
 
-- [─] **Export Arsenal**: Complete transformation logic for GitHub Issues, Notion, and Markdown exports.
-- [ ] **Enhanced Minimap**: Allow jump-panning by clicking or dragging directly on the minimap preview.
-- [ ] **Auto-Layout (Graph Physics)**: Integrate a force-directed layout (e.g., via `d3-force`) to automatically organize node clusters.
+- [x] **Export Arsenal**: Complete transformation logic for GitHub Issues, Notion, and Markdown exports.
+- [x] **Enhanced Minimap**: Allow jump-panning by clicking or dragging directly on the minimap preview.
+- [─] **Auto-Layout (Graph Physics)**: Integrate a force-directed layout (e.g., via `d3-force`) to automatically organize node clusters.
 - [ ] **Canvas Performance (LOD)**: Implement "Level of Detail" rendering to maintain 60fps with 1000+ nodes by simplifying nodes at low zoom levels.
 - [ ] **PWA & Offline Robustness**:
     - [ ] Complete `service-worker.js` for full offline-first reliability.

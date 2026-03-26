@@ -10,8 +10,9 @@ import { PWAInstallBanner } from '@/components/PWAInstallBanner'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { TimelineView } from '@/components/TimelineView'
 import { AgentSwarm } from '@/components/AgentSwarm'
+import { ExportDialog } from '@/components/ExportDialog'
 import { Toaster } from '@/components/ui/sonner'
-import { Archive, Sparkle, GitBranch, Gear, Lightning } from '@phosphor-icons/react'
+import { Archive, Sparkle, GitBranch, Gear, Lightning, Download } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -44,6 +45,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isTimelineOpen, setIsTimelineOpen] = useState(false)
   const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false)
+  const [isExportOpen, setIsExportOpen] = useState(false)
   const [vaultTypeFilter, setVaultTypeFilter] = useState<VaultItem['type'] | null>(null)
   
   const [selectedVaultItemId, setSelectedVaultItemId] = useState<string | null>(null)
@@ -152,6 +154,19 @@ Return only the tags separated by commas, no preamble.`
       (current || []).map((node) => (node.id === id ? { ...node, ...updates } : node))
     )
   }, [setCanvasNodes])
+
+  const updateCanvasNodes = useCallback((updates: Record<string, Partial<CanvasNode>>) => {
+    setCanvasNodes((current) =>
+      (current || []).map((node) => 
+        updates[node.id] ? { ...node, ...updates[node.id] } : node
+      )
+    )
+    addTimelineSnapshot('canvas-change', `Batch updated ${Object.keys(updates).length} nodes`, {
+      vaultItems: vaultItems || [],
+      canvasNodes: (canvasNodes || []).map(node => updates[node.id] ? { ...node, ...updates[node.id] } : node),
+      connections: connections || [],
+    })
+  }, [setCanvasNodes, addTimelineSnapshot, vaultItems, canvasNodes, connections])
 
   const deleteCanvasNode = useCallback((id: string) => {
     setCanvasNodes((current) => (current || []).filter((node) => node.id !== id))
@@ -504,6 +519,7 @@ Format each one clearly using Markdown.`
                 <AIPreviewPanel
                   selectedItem={selectedVaultItem}
                   selectedNodes={selectedCanvasNodes}
+                  onExport={() => setIsExportOpen(true)}
                   onClose={() => {
                     setIsAIPreviewOpen(false)
                     setSelectedVaultItemId(null)
@@ -549,6 +565,13 @@ Format each one clearly using Markdown.`
           agents={agents || []}
           onSpawn={spawnAgent}
           selectedContent={selectedVaultItem?.content || selectedCanvasNodes.map(n => n.content).join('\n---\n') || undefined}
+        />
+
+        <ExportDialog
+          isOpen={isExportOpen}
+          onClose={() => setIsExportOpen(false)}
+          item={selectedVaultItem}
+          nodes={selectedCanvasNodes}
         />
         
         <SettingsDialog

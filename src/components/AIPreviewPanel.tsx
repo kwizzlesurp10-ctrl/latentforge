@@ -12,7 +12,8 @@ import {
   ListBullets, 
   ArrowsClockwise,
   Copy,
-  CheckCircle
+  CheckCircle,
+  Download
 } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -21,6 +22,7 @@ interface AIPreviewPanelProps {
   selectedItem?: VaultItem | null
   selectedNodes?: CanvasNode[]
   onClose: () => void
+  onExport?: () => void
 }
 
 type PreviewMode = 'refine' | 'expand' | 'extract' | 'transform' | 'synthesize'
@@ -30,7 +32,7 @@ interface StreamingResult {
   isComplete: boolean
 }
 
-export function AIPreviewPanel({ selectedItem, selectedNodes = [], onClose }: AIPreviewPanelProps) {
+export function AIPreviewPanel({ selectedItem, selectedNodes = [], onClose, onExport }: AIPreviewPanelProps) {
   const [mode, setMode] = useState<PreviewMode>('refine')
   const [result, setResult] = useState<StreamingResult>({ content: '', isComplete: false })
   const [isGenerating, setIsGenerating] = useState(false)
@@ -177,14 +179,27 @@ Create an actionable plan.`
           <Sparkle size={20} weight="duotone" className="text-primary" />
           <h3 className="font-semibold text-sm">AI Preview</h3>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          className="h-8 w-8"
-        >
-          ×
-        </Button>
+        <div className="flex items-center gap-1">
+          {onExport && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onExport}
+              className="h-8 w-8 text-muted-foreground hover:text-primary transition-colors"
+              title="Export Selection"
+            >
+              <Download size={18} weight="duotone" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-8 w-8"
+          >
+            ×
+          </Button>
+        </div>
       </div>
 
       <div className="p-4 border-b border-border">

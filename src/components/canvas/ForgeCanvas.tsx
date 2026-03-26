@@ -1,12 +1,13 @@
 import { CanvasNode, Connection } from '@/lib/types'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Plus, TextT, Code, Image as ImageIcon, MapTrifold, CornersOut, Hand, Selection, Target } from '@phosphor-icons/react'
+import { Plus, TextT, Code, Image as ImageIcon, MapTrifold, CornersOut, Hand, Selection, Target, ArrowsClockwise } from '@phosphor-icons/react'
 import { CanvasNodeComponent } from './CanvasNode'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence, useSpring, useMotionValue } from 'framer-motion'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
+import * as d3 from 'd3'
 
 interface ForgeCanvasProps {
   nodes: CanvasNode[]
@@ -301,7 +302,7 @@ export function ForgeCanvas({
       const w = node.size.width * scale
       const h = node.size.height * scale
       
-      ctx.fillStyle = selectedNodeId === node.id ? 'oklch(0.65 0.28 330)' : 'oklch(0.25 0.05 270)'
+      ctx.fillStyle = selectedNodeIds.includes(node.id) ? 'oklch(0.65 0.28 330)' : 'oklch(0.25 0.05 270)'
       ctx.fillRect(x, y, w, h)
       
       ctx.strokeStyle = 'oklch(0.65 0.28 330 / 0.5)'
@@ -322,7 +323,40 @@ export function ForgeCanvas({
       ctx.lineWidth = 2
       ctx.strokeRect(viewX, viewY, viewW, viewH)
     }
-  }, [nodes, selectedNodeId, panX, panY, zoom])
+  }, [nodes, selectedNodeIds, panX, panY, zoom])
+
+  const handleMinimapMouseDown = useCallback((e: React.MouseEvent) => {
+    if (nodes.length === 0) return
+    
+    const canvas = minimapRef.current
+    if (!canvas) return
+    
+    const rect = canvas.getBoundingClientRect()
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    
+    // Recalculate bounds
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    nodes.forEach(node => {
+      minX = Math.min(minX, node.position.x)
+      minY = Math.min(minY, node.position.y)
+      maxX = Math.max(maxX, node.position.x + node.size.width)
+      maxY = Math.max(maxY, node.position.y + node.size.height)
+    })
+    
+    const scaleX = 200 / (maxX - minX + 100)
+    const scaleY = 150 / (maxY - minY + 100)
+    const scale = Math.min(scaleX, scaleY)
+    
+    const canvasX = (mouseX / scale) + minX - 50
+    const canvasY = (mouseY / scale) + minY - 50
+    
+    const viewportRect = canvasRef.current?.getBoundingClientRect()
+    if (viewportRect) {
+      panX.set(viewportRect.width / 2 - canvasX * zoom)
+      panY.set(viewportRect.height / 2 - canvasY * zoom)
+    }
+  }, [nodes, zoom, panX, panY])
 
   useEffect(() => {
     if (showMinimap) {
@@ -570,11 +604,12 @@ export function ForgeCanvas({
       <AnimatePresence>
         {showMinimap && (
           <motion.div 
-            className="absolute top-4 right-4 z-10 border-2 border-border rounded-md overflow-hidden shadow-lg"
+            className="absolute top-4 right-4 z-10 border-2 border-border rounded-md overflow-hidden shadow-lg cursor-pointer"
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ duration: 0.2 }}
+            onMouseDown={handleMinimapMouseDown}
           >
             <canvas ref={minimapRef} className="block" />
           </motion.div>
