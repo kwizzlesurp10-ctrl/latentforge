@@ -37,11 +37,11 @@ export function ExportDialog({ isOpen, onClose, item, nodes = [] }: ExportDialog
 
   const content = useMemo(() => {
     if (item) return item.content
-    return nodes.map(n => n.content).join('
+    return nodes.map(n => n.content).join(`
 
 ---
 
-')
+`)
   }, [item, nodes])
 
   const title = useMemo(() => {

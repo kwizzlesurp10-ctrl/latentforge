@@ -304,8 +304,3 @@ export function VaultSidebar({ items, isOpen, onDeleteItem, selectedItemId, onSe
     </aside>
   )
 }
-
-      </div>
-    </aside>
-  )
-}
