@@ -272,6 +272,18 @@ Format each one clearly using Markdown.`
   }, [setSettings])
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const action = params.get('action')
+    if (action === 'capture') {
+      setIsQuickCaptureOpen(true)
+      window.history.replaceState({}, '', '/')
+    } else if (action === 'timeline') {
+      setIsTimelineOpen(true)
+      window.history.replaceState({}, '', '/')
+    }
+  }, [])
+
+  useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       const isInputField = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
@@ -500,6 +512,7 @@ Format each one clearly using Markdown.`
             connections={connections || []}
             onAddNode={addCanvasNode}
             onUpdateNode={updateCanvasNode}
+            onUpdateNodes={updateCanvasNodes}
             onDeleteNode={deleteCanvasNode}
             onAddConnection={addConnection}
             selectedNodeIds={selectedCanvasNodeIds}

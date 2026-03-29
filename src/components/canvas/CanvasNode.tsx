@@ -158,37 +158,45 @@ export function CanvasNodeComponent({
               {node.type}
             </span>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete()
-            }}
-          >
-            <Trash size={14} />
-          </Button>
+          {zoom > 0.5 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete()
+              }}
+            >
+              <Trash size={14} />
+            </Button>
+          )}
         </div>
 
-        <Textarea
-          value={node.content}
-          onChange={(e) => onUpdate({ content: e.target.value })}
-          onClick={(e) => e.stopPropagation()}
-          className={cn(
-            'min-h-[100px] resize-none border-none bg-transparent p-0 focus-visible:ring-0',
-            node.type === 'code' && 'font-mono text-sm'
-          )}
-          placeholder={
-            node.type === 'code'
-              ? '// Write code...'
-              : node.type === 'text'
-              ? 'Type your idea...'
-              : 'Add content...'
-          }
-        />
+        {zoom > 0.4 ? (
+          <Textarea
+            value={node.content}
+            onChange={(e) => onUpdate({ content: e.target.value })}
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              'min-h-[100px] resize-none border-none bg-transparent p-0 focus-visible:ring-0',
+              node.type === 'code' && 'font-mono text-sm'
+            )}
+            placeholder={
+              node.type === 'code'
+                ? '// Write code...'
+                : node.type === 'text'
+                ? 'Type your idea...'
+                : 'Add content...'
+            }
+          />
+        ) : (
+          <div className="h-24 flex items-center justify-center italic text-muted-foreground text-[10px] opacity-50">
+            {node.content.slice(0, 50)}...
+          </div>
+        )}
 
-        {isSelected && (
+        {isSelected && zoom > 0.3 && (
           <>
             <motion.div
               className="resize-handle absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity"

@@ -428,29 +428,28 @@ export function ForgeCanvas({
       }
       
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedNodeId) {
+        if (selectedNodeIds.length > 0) {
           e.preventDefault()
-          onDeleteNode(selectedNodeId)
-          onSelectNode(null)
-          toast.success('Node deleted')
-        } else if (selectedNodes.size > 0) {
-          e.preventDefault()
-          selectedNodes.forEach(id => onDeleteNode(id))
-          setSelectedNodes(new Set())
-          toast.success(`${selectedNodes.size} nodes deleted`)
+          selectedNodeIds.forEach(id => onDeleteNode(id))
+          onSelectNodes([])
+          toast.success(`${selectedNodeIds.length} node${selectedNodeIds.length > 1 ? 's' : ''} deleted`)
         }
       }
       
       if (e.key === 'Escape') {
-        onSelectNode(null)
-        setSelectedNodes(new Set())
+        onSelectNodes([])
       }
       
       if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
         e.preventDefault()
-        const allNodeIds = new Set(nodes.map(n => n.id))
-        setSelectedNodes(allNodeIds)
-        toast.success(`Selected all ${allNodeIds.size} nodes`)
+        const allNodeIds = nodes.map(n => n.id)
+        onSelectNodes(allNodeIds)
+        toast.success(`Selected all ${allNodeIds.length} nodes`)
+      }
+
+      if (e.key === 'l' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        applyAutoLayout()
       }
       
       if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
@@ -577,6 +576,22 @@ export function ForgeCanvas({
           </TooltipTrigger>
           <TooltipContent>
             Toggle minimap <span className="text-muted-foreground ml-2">⌘M</span>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="secondary"
+              onClick={applyAutoLayout}
+              className="shadow-lg"
+            >
+              <ArrowsClockwise size={18} weight="duotone" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            Auto-layout <span className="text-muted-foreground ml-2">L</span>
           </TooltipContent>
         </Tooltip>
 
@@ -791,8 +806,8 @@ export function ForgeCanvas({
               <CanvasNodeComponent
                 key={node.id}
                 node={node}
-                isSelected={selectedNodeId === node.id || selectedNodes.has(node.id)}
-                onSelect={() => onSelectNode(node.id)}
+                isSelected={selectedNodeIds.includes(node.id)}
+                onSelect={() => onSelectNodes([node.id])}
                 onUpdate={(updates) => onUpdateNode(node.id, updates)}
                 onDelete={() => onDeleteNode(node.id)}
                 onStartConnection={(pos) => handleStartConnection(node.id, pos)}
